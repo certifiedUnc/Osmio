@@ -30,7 +30,59 @@ export interface LectureSummary {
   title: string;
   week: number;
   duration_s: number;
+  status: string;
   published: boolean;
+}
+
+export type Role = "student" | "instructor" | "admin";
+
+export interface User {
+  id: number;
+  email: string;
+  full_name: string;
+  role: Role;
+}
+
+export interface AuthResult {
+  access_token: string;
+  token_type: string;
+  user: User;
+}
+
+export interface Announcement {
+  id: number;
+  title: string;
+  body: string;
+  created_at: string;
+}
+
+export interface Partner {
+  id: number;
+  name: string;
+  status: string;
+}
+
+export interface ApiKey {
+  id: number;
+  label: string;
+  key_prefix: string;
+  revoked: boolean;
+}
+
+export interface ApiKeyCreated extends ApiKey {
+  key: string;
+}
+
+export interface Enrollment {
+  id: number;
+  course_id: number;
+  student_id: number;
+  student: User;
+}
+
+export interface License {
+  id: number;
+  course_id: number;
 }
 
 export interface LectureDetail extends LectureSummary {
@@ -81,6 +133,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(res.status, detail);
   }
 
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -102,6 +155,138 @@ export function askQuestion(lectureId: number, input: QuestionInput): Promise<Qu
     cache: "no-store",
     body: JSON.stringify(input),
   });
+}
+
+// Merge a bearer token into a request, and never cache authed reads.
+function authed(token: string, init: RequestInit = {}): RequestInit {
+  return {
+    ...init,
+    cache: "no-store",
+    headers: { ...init.headers, Authorization: `Bearer ${token}` },
+  };
+}
+
+// --- Auth ---
+export function login(email: string, password: string): Promise<AuthResult> {
+  return request("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+}
+
+export function register(email: string, password: string, full_name: string): Promise<AuthResult> {
+  return request("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ email, password, full_name }),
+  });
+}
+
+export function getMe(token: string): Promise<User> {
+  return request("/auth/me", authed(token));
+}
+
+// --- Student / shared ---
+export function getMyCourses(token: string): Promise<Course[]> {
+  return request("/me/courses", authed(token));
+}
+
+export function getAnnouncements(courseId: number, token: string): Promise<Announcement[]> {
+  return request(`/courses/${courseId}/announcements`, authed(token));
+}
+
+// --- Instructor ---
+export interface LectureCreate {
+  course_id: number;
+  title: string;
+  week: number;
+  duration_s: number;
+  stream_uid?: string;
+}
+
+export function createLecture(payload: LectureCreate, token: string): Promise<LectureSummary> {
+  return request("/instructor/lectures", authed(token, { method: "POST", body: JSON.stringify(payload) }));
+}
+
+export function processLecture(lectureId: number, token: string): Promise<LectureSummary> {
+  return request(`/instructor/lectures/${lectureId}/process`, authed(token, { method: "POST" }));
+}
+
+export function postAnnouncement(
+  courseId: number,
+  payload: { title: string; body: string },
+  token: string,
+): Promise<Announcement> {
+  return request(
+    `/instructor/courses/${courseId}/announcements`,
+    authed(token, { method: "POST", body: JSON.stringify(payload) }),
+  );
+}
+
+// --- Admin ---
+export function adminListUsers(token: string): Promise<User[]> {
+  return request("/admin/users", authed(token));
+}
+
+export function adminCreateUser(
+  payload: { email: string; password: string; full_name: string; role: Role },
+  token: string,
+): Promise<User> {
+  return request("/admin/users", authed(token, { method: "POST", body: JSON.stringify(payload) }));
+}
+
+export function adminSetRole(userId: number, role: Role, token: string): Promise<User> {
+  return request(`/admin/users/${userId}`, authed(token, { method: "PATCH", body: JSON.stringify({ role }) }));
+}
+
+export function adminListCourses(token: string): Promise<Course[]> {
+  return request("/admin/courses", authed(token));
+}
+
+export function adminCreateCourse(
+  payload: { code: string; title: string; term: string; instructor_id?: number },
+  token: string,
+): Promise<Course> {
+  return request("/admin/courses", authed(token, { method: "POST", body: JSON.stringify(payload) }));
+}
+
+export function adminListEnrollments(courseId: number, token: string): Promise<Enrollment[]> {
+  return request(`/admin/courses/${courseId}/enrollments`, authed(token));
+}
+
+export function adminEnroll(
+  payload: { course_id: number; student_id: number },
+  token: string,
+): Promise<Enrollment> {
+  return request("/admin/enrollments", authed(token, { method: "POST", body: JSON.stringify(payload) }));
+}
+
+export function adminUnenroll(enrollmentId: number, token: string): Promise<void> {
+  return request(`/admin/enrollments/${enrollmentId}`, authed(token, { method: "DELETE" }));
+}
+
+export function adminListPartners(token: string): Promise<Partner[]> {
+  return request("/admin/partners", authed(token));
+}
+
+export function adminCreatePartner(name: string, token: string): Promise<Partner> {
+  return request("/admin/partners", authed(token, { method: "POST", body: JSON.stringify({ name }) }));
+}
+
+export function adminListKeys(partnerId: number, token: string): Promise<ApiKey[]> {
+  return request(`/admin/partners/${partnerId}/keys`, authed(token));
+}
+
+export function adminCreateKey(partnerId: number, label: string, token: string): Promise<ApiKeyCreated> {
+  return request(`/admin/partners/${partnerId}/keys`, authed(token, { method: "POST", body: JSON.stringify({ label }) }));
+}
+
+export function adminRevokeKey(partnerId: number, keyId: number, token: string): Promise<ApiKey> {
+  return request(`/admin/partners/${partnerId}/keys/${keyId}/revoke`, authed(token, { method: "POST" }));
+}
+
+export function adminListLicenses(partnerId: number, token: string): Promise<License[]> {
+  return request(`/admin/partners/${partnerId}/licenses`, authed(token));
+}
+
+export function adminGrantLicense(partnerId: number, courseId: number, token: string): Promise<License> {
+  return request(`/admin/partners/${partnerId}/licenses`, authed(token, { method: "POST", body: JSON.stringify({ course_id: courseId }) }));
 }
 
 /** 754000 -> "12:34", 3_725_000 -> "1:02:05". */
