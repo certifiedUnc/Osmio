@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  ApiError,
   adminCreateCourse,
   adminCreateKey,
   adminCreatePartner,
@@ -33,6 +34,10 @@ const ROLES: Role[] = ["student", "instructor", "admin"];
 const input = "rounded border border-neutral-300 px-2 py-1.5 text-sm outline-none focus:border-neutral-500";
 const btn = "rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40";
 
+function msg(e: unknown, fallback: string): string {
+  return e instanceof ApiError ? e.message : fallback;
+}
+
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-lg border border-neutral-200">
@@ -48,12 +53,13 @@ export default function AdminPage() {
   const { token } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadUsers = useCallback(() => {
-    if (token) adminListUsers(token).then(setUsers).catch(() => {});
+    if (token) adminListUsers(token).then(setUsers).catch(() => setLoadError("Could not load users."));
   }, [token]);
   const loadCourses = useCallback(() => {
-    if (token) adminListCourses(token).then(setCourses).catch(() => {});
+    if (token) adminListCourses(token).then(setCourses).catch(() => setLoadError("Could not load courses."));
   }, [token]);
 
   useEffect(() => {
@@ -66,6 +72,7 @@ export default function AdminPage() {
   return (
     <main className="mx-auto max-w-4xl space-y-8 p-6">
       <h1 className="text-2xl font-semibold text-neutral-900">Admin</h1>
+      {loadError && <p className="text-sm text-red-700">{loadError}</p>}
       <UsersSection token={token} users={users} reload={loadUsers} />
       <CoursesSection token={token} courses={courses} users={users} reload={loadCourses} />
       <EnrollmentSection token={token} courses={courses} students={users.filter((u) => u.role === "student")} />
@@ -90,8 +97,18 @@ function UsersSection({ token, users, reload }: { token: string; users: User[]; 
       setName("");
       setPassword("");
       reload();
-    } catch {
-      setError("Could not create user (email may already exist).");
+    } catch (err) {
+      setError(msg(err, "Could not create user (email may already exist)."));
+    }
+  }
+
+  async function changeRole(userId: number, next: Role) {
+    setError(null);
+    try {
+      await adminSetRole(userId, next, token);
+      reload();
+    } catch (err) {
+      setError(msg(err, "Could not change role."));
     }
   }
 
@@ -104,14 +121,7 @@ function UsersSection({ token, users, reload }: { token: string; users: User[]; 
               {u.full_name || u.email}
               <span className="ml-2 text-neutral-400">{u.email}</span>
             </span>
-            <select
-              value={u.role}
-              onChange={async (e) => {
-                await adminSetRole(u.id, e.target.value as Role, token);
-                reload();
-              }}
-              className={input}
-            >
+            <select value={u.role} onChange={(e) => changeRole(u.id, e.target.value as Role)} className={input}>
               {ROLES.map((r) => (
                 <option key={r} value={r}>
                   {r}
@@ -120,6 +130,7 @@ function UsersSection({ token, users, reload }: { token: string; users: User[]; 
             </select>
           </li>
         ))}
+        {users.length === 0 && <li className="py-2 text-sm text-neutral-400">No users yet.</li>}
       </ul>
       <form onSubmit={create} className="mt-4 flex flex-wrap items-center gap-2">
         <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" required className={`${input} flex-1`} />
@@ -176,8 +187,8 @@ function CoursesSection({
       setTitle("");
       setTerm("");
       reload();
-    } catch {
-      setError("Could not create course (code may already exist).");
+    } catch (err) {
+      setError(msg(err, "Could not create course (code may already exist)."));
     }
   }
 
@@ -189,6 +200,7 @@ function CoursesSection({
             {c.code}: {c.title} <span className="text-neutral-400">{c.term}</span>
           </li>
         ))}
+        {courses.length === 0 && <li className="py-2 text-sm text-neutral-400">No courses yet.</li>}
       </ul>
       <form onSubmit={create} className="mt-4 flex flex-wrap items-center gap-2">
         <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Code" required className={input} />
@@ -223,13 +235,22 @@ function EnrollmentSection({
   const [courseId, setCourseId] = useState<number | "">("");
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [studentId, setStudentId] = useState<number | "">("");
+  const [error, setError] = useState<string | null>(null);
+  const reqId = useRef(0);
 
   const load = useCallback(() => {
     if (courseId === "") {
       setEnrollments([]);
       return;
     }
-    adminListEnrollments(courseId, token).then(setEnrollments).catch(() => {});
+    // Only the most recent request applies its result, so switching courses fast can't
+    // let a slower earlier response overwrite the current selection.
+    const id = ++reqId.current;
+    adminListEnrollments(courseId, token)
+      .then((data) => {
+        if (id === reqId.current) setEnrollments(data);
+      })
+      .catch(() => {});
   }, [courseId, token]);
 
   useEffect(() => {
@@ -238,9 +259,24 @@ function EnrollmentSection({
 
   async function add() {
     if (courseId === "" || studentId === "") return;
-    await adminEnroll({ course_id: courseId, student_id: studentId }, token);
-    setStudentId("");
-    load();
+    setError(null);
+    try {
+      await adminEnroll({ course_id: courseId, student_id: studentId }, token);
+      setStudentId("");
+      load();
+    } catch (err) {
+      setError(msg(err, "Could not enroll student."));
+    }
+  }
+
+  async function remove(enrollmentId: number) {
+    setError(null);
+    try {
+      await adminUnenroll(enrollmentId, token);
+      load();
+    } catch (err) {
+      setError(msg(err, "Could not remove student."));
+    }
   }
 
   return (
@@ -260,14 +296,7 @@ function EnrollmentSection({
             {enrollments.map((en) => (
               <li key={en.id} className="flex items-center justify-between py-2 text-sm">
                 <span className="text-neutral-800">{en.student.full_name || en.student.email}</span>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await adminUnenroll(en.id, token);
-                    load();
-                  }}
-                  className="text-xs text-red-600 hover:underline"
-                >
+                <button type="button" onClick={() => remove(en.id)} className="text-xs text-red-600 hover:underline">
                   Remove
                 </button>
               </li>
@@ -287,6 +316,7 @@ function EnrollmentSection({
               Enroll
             </button>
           </div>
+          {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
         </div>
       )}
     </Card>
@@ -296,9 +326,10 @@ function EnrollmentSection({
 function PartnersSection({ token, courses }: { token: string; courses: Course[] }) {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    adminListPartners(token).then(setPartners).catch(() => {});
+    adminListPartners(token).then(setPartners).catch(() => setError("Could not load partners."));
   }, [token]);
 
   useEffect(() => {
@@ -308,9 +339,14 @@ function PartnersSection({ token, courses }: { token: string; courses: Course[] 
   async function create(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    await adminCreatePartner(name.trim(), token);
-    setName("");
-    load();
+    setError(null);
+    try {
+      await adminCreatePartner(name.trim(), token);
+      setName("");
+      load();
+    } catch (err) {
+      setError(msg(err, "Could not create partner."));
+    }
   }
 
   return (
@@ -327,6 +363,7 @@ function PartnersSection({ token, courses }: { token: string; courses: Course[] 
           Add partner
         </button>
       </form>
+      {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
     </Card>
   );
 }
@@ -336,6 +373,7 @@ function PartnerRow({ partner, token, courses }: { partner: Partner; token: stri
   const [licenses, setLicenses] = useState<License[]>([]);
   const [freshKey, setFreshKey] = useState<ApiKeyCreated | null>(null);
   const [courseId, setCourseId] = useState<number | "">("");
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     adminListKeys(partner.id, token).then(setKeys).catch(() => {});
@@ -351,6 +389,39 @@ function PartnerRow({ partner, token, courses }: { partner: Partner; token: stri
     return c ? `${c.code}: ${c.title}` : `course ${id}`;
   };
 
+  async function createKey() {
+    setError(null);
+    try {
+      const created = await adminCreateKey(partner.id, "", token);
+      setFreshKey(created);
+      load();
+    } catch (err) {
+      setError(msg(err, "Could not create key."));
+    }
+  }
+
+  async function revoke(keyId: number) {
+    setError(null);
+    try {
+      await adminRevokeKey(partner.id, keyId, token);
+      load();
+    } catch (err) {
+      setError(msg(err, "Could not revoke key."));
+    }
+  }
+
+  async function grant() {
+    if (courseId === "") return;
+    setError(null);
+    try {
+      await adminGrantLicense(partner.id, courseId, token);
+      setCourseId("");
+      load();
+    } catch (err) {
+      setError(msg(err, "Could not grant license."));
+    }
+  }
+
   return (
     <div className="rounded border border-neutral-200 p-3">
       <p className="font-medium text-neutral-900">{partner.name}</p>
@@ -364,29 +435,14 @@ function PartnerRow({ partner, token, courses }: { partner: Partner; token: stri
                 {k.key_prefix}… {k.label && `(${k.label})`} {k.revoked && <span className="text-red-600">revoked</span>}
               </span>
               {!k.revoked && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await adminRevokeKey(partner.id, k.id, token);
-                    load();
-                  }}
-                  className="text-xs text-red-600 hover:underline"
-                >
+                <button type="button" onClick={() => revoke(k.id)} className="text-xs text-red-600 hover:underline">
                   Revoke
                 </button>
               )}
             </li>
           ))}
         </ul>
-        <button
-          type="button"
-          onClick={async () => {
-            const created = await adminCreateKey(partner.id, "", token);
-            setFreshKey(created);
-            load();
-          }}
-          className="mt-2 rounded border border-neutral-300 px-2 py-0.5 text-xs"
-        >
+        <button type="button" onClick={createKey} className="mt-2 rounded border border-neutral-300 px-2 py-0.5 text-xs">
           Create key
         </button>
         {freshKey && (
@@ -415,21 +471,12 @@ function PartnerRow({ partner, token, courses }: { partner: Partner; token: stri
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            disabled={courseId === ""}
-            onClick={async () => {
-              if (courseId === "") return;
-              await adminGrantLicense(partner.id, courseId, token);
-              setCourseId("");
-              load();
-            }}
-            className="rounded border border-neutral-300 px-2 py-0.5 text-xs disabled:opacity-40"
-          >
+          <button type="button" disabled={courseId === ""} onClick={grant} className="rounded border border-neutral-300 px-2 py-0.5 text-xs disabled:opacity-40">
             Grant
           </button>
         </div>
       </div>
+      {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
     </div>
   );
 }

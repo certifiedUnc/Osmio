@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   createLecture,
@@ -73,18 +73,30 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
   const [week, setWeek] = useState(1);
   const [duration, setDuration] = useState(60);
   const [adding, setAdding] = useState(false);
+  const [opError, setOpError] = useState<string | null>(null);
 
   const [annTitle, setAnnTitle] = useState("");
   const [annBody, setAnnBody] = useState("");
   const [posting, setPosting] = useState(false);
   const [posted, setPosted] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
+
+  const mounted = useRef(true);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
 
   const poll = useCallback((lectureId: number) => {
     let tries = 0;
     const tick = async () => {
+      if (!mounted.current) return;
       tries += 1;
       try {
         const l = await getLecture(lectureId);
+        if (!mounted.current) return;
         setLectures((prev) =>
           prev.map((x) => (x.id === lectureId ? { ...x, status: l.status, published: l.published } : x)),
         );
@@ -102,6 +114,7 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
     e.preventDefault();
     if (adding || !title.trim()) return;
     setAdding(true);
+    setOpError(null);
     try {
       const l = await createLecture(
         { course_id: course.id, title: title.trim(), week, duration_s: duration },
@@ -109,28 +122,40 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
       );
       setLectures((prev) => [...prev, l]);
       setTitle("");
+    } catch {
+      setOpError("Could not add lecture. Please try again.");
     } finally {
       setAdding(false);
     }
   }
 
   async function runPipeline(lectureId: number) {
-    setLectures((prev) =>
-      prev.map((x) => (x.id === lectureId ? { ...x, status: "uploaded", published: false } : x)),
+    const prev = lectures.find((x) => x.id === lectureId);
+    setOpError(null);
+    setLectures((cur) =>
+      cur.map((x) => (x.id === lectureId ? { ...x, status: "uploaded", published: false } : x)),
     );
-    await processLecture(lectureId, token);
-    poll(lectureId);
+    try {
+      await processLecture(lectureId, token);
+      poll(lectureId);
+    } catch {
+      if (prev) setLectures((cur) => cur.map((x) => (x.id === lectureId ? prev : x)));
+      setOpError("Could not start processing. Please try again.");
+    }
   }
 
   async function submitAnnouncement(e: React.FormEvent) {
     e.preventDefault();
     if (posting || !annTitle.trim() || !annBody.trim()) return;
     setPosting(true);
+    setPostError(null);
     try {
       await postAnnouncement(course.id, { title: annTitle.trim(), body: annBody.trim() }, token);
       setAnnTitle("");
       setAnnBody("");
       setPosted(true);
+    } catch {
+      setPostError("Could not post announcement. Please try again.");
     } finally {
       setPosting(false);
     }
@@ -210,6 +235,7 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
               Add lecture
             </button>
           </form>
+          {opError && <p className="mt-2 text-xs text-red-700">{opError}</p>}
         </div>
 
         <div>
@@ -245,6 +271,7 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
                 Post
               </button>
               {posted && <span className="text-xs text-green-700">Posted.</span>}
+              {postError && <span className="text-xs text-red-700">{postError}</span>}
             </div>
           </form>
         </div>
