@@ -4,9 +4,9 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import require_role
-from ..models import Course, Lecture, ProcessingStatus, Role, User
+from ..models import Announcement, Course, Lecture, ProcessingStatus, Role, User
 from ..pipeline import run_pipeline
-from ..schemas import CourseOut, LectureCreate, LectureSummary
+from ..schemas import AnnouncementIn, AnnouncementOut, CourseOut, LectureCreate, LectureSummary
 
 router = APIRouter(prefix="/instructor", tags=["instructor"])
 
@@ -72,3 +72,24 @@ def process_lecture(
 
     background.add_task(run_pipeline, lecture.id)
     return lecture
+
+
+@router.post(
+    "/courses/{course_id}/announcements",
+    response_model=AnnouncementOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_announcement(
+    course_id: int,
+    payload: AnnouncementIn,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    _course_owned(db, course_id, user)
+    announcement = Announcement(
+        course_id=course_id, author_id=user.id, title=payload.title, body=payload.body
+    )
+    db.add(announcement)
+    db.commit()
+    db.refresh(announcement)
+    return announcement

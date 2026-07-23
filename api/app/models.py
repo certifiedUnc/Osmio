@@ -75,6 +75,8 @@ class Enrollment(Base):
     course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), index=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
 
+    student: Mapped["User"] = relationship()
+
 
 class Lecture(Base):
     __tablename__ = "lectures"

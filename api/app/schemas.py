@@ -90,3 +90,95 @@ class CourseOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AnnouncementIn(BaseModel):
+    title: str
+    body: str
+
+
+class AnnouncementOut(BaseModel):
+    id: int
+    title: str
+    body: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AdminUserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    full_name: str = ""
+    role: str
+
+
+class RoleUpdate(BaseModel):
+    role: str
+
+
+class CourseCreate(BaseModel):
+    code: str
+    title: str
+    term: str = ""
+    subject_id: int | None = None
+    instructor_id: int | None = None
+
+
+class EnrollIn(BaseModel):
+    course_id: int
+    student_id: int
+
+
+class EnrollmentOut(BaseModel):
+    id: int
+    course_id: int
+    student_id: int
+    student: UserOut
+
+    class Config:
+        from_attributes = True
+
+
+class PartnerIn(BaseModel):
+    name: str
+
+
+class PartnerOut(BaseModel):
+    id: int
+    name: str
+    status: str
+
+    class Config:
+        from_attributes = True
+
+
+class ApiKeyIn(BaseModel):
+    label: str = ""
+
+
+class ApiKeyOut(BaseModel):
+    id: int
+    label: str
+    key_prefix: str
+    revoked: bool
+
+    class Config:
+        from_attributes = True
+
+
+class ApiKeyCreated(ApiKeyOut):
+    key: str  # full key, shown once
+
+
+class LicenseIn(BaseModel):
+    course_id: int
+
+
+class LicenseOut(BaseModel):
+    id: int
+    course_id: int
+
+    class Config:
+        from_attributes = True
