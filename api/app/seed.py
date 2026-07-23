@@ -1,12 +1,23 @@
-"""Seed one demo course + lecture so the player has real data before the pipeline exists.
+"""Seed demo accounts + one course/lecture so the app has something to show on a fresh DB.
 
-The transcript below is a short stand-in; the real one comes from Groq (see scripts/).
+Demo logins (all password "password"): admin@osmio.dev, instructor@osmio.dev, student@osmio.dev.
+The transcript below is a stand-in; the real one comes from the pipeline (Groq).
 """
 
 from sqlalchemy import select
 
 from .db import SessionLocal
-from .models import Course, Lecture, TranscriptSegment
+from .models import (
+    Course,
+    Enrollment,
+    Lecture,
+    ProcessingStatus,
+    Role,
+    Subject,
+    TranscriptSegment,
+    User,
+)
+from .security import hash_password
 
 DEMO_TRANSCRIPT = [
     (0, 6000, "Alright, let's get started. Today we're looking at how search engines rank pages."),
@@ -24,29 +35,61 @@ DEMO_TRANSCRIPT = [
 def seed():
     db = SessionLocal()
     try:
-        if db.scalar(select(Course).limit(1)):
+        if db.scalar(select(User).limit(1)):
             return  # already seeded
 
-        course = Course(code="CS305", title="Information Retrieval", term="2026-Autumn")
+        admin = User(
+            email="admin@osmio.dev",
+            full_name="Site Admin",
+            role=Role.admin,
+            password_hash=hash_password("password"),
+        )
+        instructor = User(
+            email="instructor@osmio.dev",
+            full_name="Prof. Rao",
+            role=Role.instructor,
+            password_hash=hash_password("password"),
+        )
+        student = User(
+            email="student@osmio.dev",
+            full_name="Priya",
+            role=Role.student,
+            password_hash=hash_password("password"),
+        )
+        db.add_all([admin, instructor, student])
+        db.flush()
+
+        subject = Subject(code="CS", name="Computer Science")
+        db.add(subject)
+        db.flush()
+
+        course = Course(
+            code="CS305",
+            title="Information Retrieval",
+            term="2026-Autumn",
+            subject_id=subject.id,
+            instructor_id=instructor.id,
+        )
         db.add(course)
         db.flush()
+
+        db.add(Enrollment(course_id=course.id, student_id=student.id))
 
         lecture = Lecture(
             course_id=course.id,
             title="Ranking pages with PageRank",
             week=7,
             duration_s=67,
+            status=ProcessingStatus.published,
             published=True,
-            # Fill in with a real Cloudflare Stream UID once a lecture is uploaded.
+            uploaded_by=instructor.id,
             stream_uid="",
         )
         db.add(lecture)
         db.flush()
 
         for start, end, text in DEMO_TRANSCRIPT:
-            db.add(
-                TranscriptSegment(lecture_id=lecture.id, start_ms=start, end_ms=end, text=text)
-            )
+            db.add(TranscriptSegment(lecture_id=lecture.id, start_ms=start, end_ms=end, text=text))
         db.commit()
     finally:
         db.close()

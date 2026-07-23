@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .db import Base, engine
-from .routers import lectures
+from .routers import admin, auth, instructor, lectures, me
 from .seed import seed
 
 
@@ -26,6 +26,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
+app.include_router(admin.router)
+app.include_router(instructor.router)
+app.include_router(me.router)
 app.include_router(lectures.router)
 
 
