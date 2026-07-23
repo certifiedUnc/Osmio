@@ -228,6 +228,7 @@ export interface CalendarEvent {
   course_id: number;
   course_code: string;
   link: string | null;
+  cancelled: boolean;
 }
 
 export function getCalendar(token: string): Promise<CalendarEvent[]> {
@@ -270,6 +271,38 @@ export function createExam(
     `/instructor/courses/${courseId}/exams`,
     authed(token, { method: "POST", body: JSON.stringify(payload) }),
   );
+}
+
+export function updateLecture(
+  lectureId: number,
+  payload: { scheduled_at?: string; cancelled?: boolean },
+  token: string,
+): Promise<LectureSummary> {
+  return request(`/instructor/lectures/${lectureId}`, authed(token, { method: "PATCH", body: JSON.stringify(payload) }));
+}
+
+export function updateAssignment(
+  assignmentId: number,
+  payload: { title?: string; due_at?: string },
+  token: string,
+): Promise<Assignment> {
+  return request(`/instructor/assignments/${assignmentId}`, authed(token, { method: "PATCH", body: JSON.stringify(payload) }));
+}
+
+export function deleteAssignment(assignmentId: number, token: string): Promise<void> {
+  return request(`/instructor/assignments/${assignmentId}`, authed(token, { method: "DELETE" }));
+}
+
+export function updateExam(
+  examId: number,
+  payload: { title?: string; starts_at?: string },
+  token: string,
+): Promise<Exam> {
+  return request(`/instructor/exams/${examId}`, authed(token, { method: "PATCH", body: JSON.stringify(payload) }));
+}
+
+export function deleteExam(examId: number, token: string): Promise<void> {
+  return request(`/instructor/exams/${examId}`, authed(token, { method: "DELETE" }));
 }
 
 // --- Admin ---

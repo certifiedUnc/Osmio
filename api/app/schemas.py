@@ -227,3 +227,19 @@ class CalendarEvent(BaseModel):
     course_id: int
     course_code: str
     link: str | None = None
+    cancelled: bool = False
+
+
+class LectureUpdate(BaseModel):
+    scheduled_at: datetime | None = None
+    cancelled: bool | None = None
+
+
+class AssignmentUpdate(BaseModel):
+    title: str | None = None
+    due_at: datetime | None = None
+
+
+class ExamUpdate(BaseModel):
+    title: str | None = None
+    starts_at: datetime | None = None

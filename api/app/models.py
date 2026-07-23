@@ -92,6 +92,7 @@ class Lecture(Base):
         Enum(ProcessingStatus), default=ProcessingStatus.uploaded
     )
     published: Mapped[bool] = mapped_column(default=False)
+    cancelled: Mapped[bool] = mapped_column(default=False)
     uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     # Object key of the raw upload before the pipeline runs.
     source_key: Mapped[str] = mapped_column(String(200), default="")

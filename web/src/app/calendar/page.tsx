@@ -1,9 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { getCalendar, type CalendarEvent } from "@/lib/api";
+import {
+  deleteAssignment,
+  deleteExam,
+  getCalendar,
+  updateAssignment,
+  updateExam,
+  updateLecture,
+  type CalendarEvent,
+} from "@/lib/api";
 import { RequireRole, useAuth } from "@/lib/auth";
 import Nav from "@/components/Nav";
 
@@ -25,6 +33,10 @@ function timeLabel(iso: string) {
   const d = new Date(iso);
   return `${d.getHours()}:${pad(d.getMinutes())}`;
 }
+function toLocalInput(iso: string) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export default function CalendarPage() {
   return (
@@ -36,7 +48,8 @@ export default function CalendarPage() {
 }
 
 function CalendarView() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canEdit = user?.role === "instructor" || user?.role === "admin";
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [cursor, setCursor] = useState(() => {
@@ -44,12 +57,22 @@ function CalendarView() {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
 
-  useEffect(() => {
+  const [selected, setSelected] = useState<CalendarEvent | null>(null);
+  const [editWhen, setEditWhen] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
     if (!token) return;
-    getCalendar(token)
-      .then(setEvents)
-      .catch(() => setError("Could not load your calendar."));
+    try {
+      setEvents(await getCalendar(token));
+    } catch {
+      setError("Could not load your calendar.");
+    }
   }, [token]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const byDay = useMemo(() => {
     const m = new Map<string, CalendarEvent[]>();
@@ -64,7 +87,7 @@ function CalendarView() {
 
   const days = useMemo(() => {
     const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-    start.setDate(1 - start.getDay()); // back up to the Sunday of the first week
+    start.setDate(1 - start.getDay());
     return Array.from({ length: 42 }, (_, i) => {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
@@ -74,6 +97,31 @@ function CalendarView() {
 
   const monthLabel = cursor.toLocaleString(undefined, { month: "long", year: "numeric" });
   const todayKey = dateKey(new Date());
+
+  function pick(e: CalendarEvent) {
+    setSelected(e);
+    setEditWhen(toLocalInput(e.at));
+    setEditError(null);
+  }
+
+  async function run(action: () => Promise<unknown>) {
+    setEditError(null);
+    try {
+      await action();
+      await refresh();
+      setSelected(null);
+    } catch {
+      setEditError("That change could not be saved.");
+    }
+  }
+
+  function reschedule() {
+    if (!selected || !token || !editWhen) return;
+    const iso = new Date(editWhen).toISOString();
+    if (selected.type === "lecture") return run(() => updateLecture(selected.id, { scheduled_at: iso }, token));
+    if (selected.type === "assignment") return run(() => updateAssignment(selected.id, { due_at: iso }, token));
+    return run(() => updateExam(selected.id, { starts_at: iso }, token));
+  }
 
   if (!token) return null;
 
@@ -110,6 +158,7 @@ function CalendarView() {
         <span className="flex items-center gap-1">
           <span className="h-2 w-2 rounded bg-red-400" /> Exam
         </span>
+        {canEdit && <span className="text-neutral-400">Click an event to reschedule, cancel, or delete.</span>}
       </div>
 
       {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
@@ -131,20 +180,25 @@ function CalendarView() {
               </div>
               <div className="mt-1 space-y-1">
                 {dayEvents.map((e) => {
-                  const chip = (
-                    <span
-                      className={`block truncate rounded px-1 py-0.5 text-[11px] ${TYPE_STYLE[e.type]}`}
-                      title={`${e.course_code}: ${e.title}`}
-                    >
-                      {timeLabel(e.at)} {e.title}
-                    </span>
-                  );
+                  const cancelled = e.type === "lecture" && e.cancelled;
+                  const label = `${timeLabel(e.at)} ${e.title}${cancelled ? " (cancelled)" : ""}`;
+                  const cls = `block w-full truncate rounded px-1 py-0.5 text-left text-[11px] ${TYPE_STYLE[e.type]} ${cancelled ? "line-through opacity-60" : ""}`;
+                  const eventKey = `${e.type}-${e.id}`;
+                  if (canEdit) {
+                    return (
+                      <button key={eventKey} type="button" onClick={() => pick(e)} className={cls} title={`${e.course_code}: ${e.title}`}>
+                        {label}
+                      </button>
+                    );
+                  }
                   return e.link ? (
-                    <Link key={`${e.type}-${e.id}`} href={e.link}>
-                      {chip}
+                    <Link key={eventKey} href={e.link} className={cls} title={`${e.course_code}: ${e.title}`}>
+                      {label}
                     </Link>
                   ) : (
-                    <div key={`${e.type}-${e.id}`}>{chip}</div>
+                    <span key={eventKey} className={cls} title={`${e.course_code}: ${e.title}`}>
+                      {label}
+                    </span>
                   );
                 })}
               </div>
@@ -152,6 +206,71 @@ function CalendarView() {
           );
         })}
       </div>
+
+      {canEdit && selected && (
+        <div className="mt-4 rounded-lg border border-neutral-200 p-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="font-medium text-neutral-900">
+                {selected.course_code}: {selected.title}{" "}
+                <span className="text-xs font-normal text-neutral-400">({selected.type})</span>
+              </p>
+              {selected.type === "lecture" && selected.link && (
+                <Link href={selected.link} className="text-xs text-sky-700 hover:underline">
+                  Open lecture
+                </Link>
+              )}
+            </div>
+            <button type="button" onClick={() => setSelected(null)} className="text-sm text-neutral-500 hover:text-black">
+              Close
+            </button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label className="text-xs text-neutral-500">
+              Reschedule
+              <input
+                type="datetime-local"
+                value={editWhen}
+                onChange={(ev) => setEditWhen(ev.target.value)}
+                className="ml-1 rounded border border-neutral-300 px-2 py-1.5 text-sm"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={reschedule}
+              className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white"
+            >
+              Save
+            </button>
+
+            {selected.type === "lecture" ? (
+              <button
+                type="button"
+                onClick={() => run(() => updateLecture(selected.id, { cancelled: !selected.cancelled }, token))}
+                className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+              >
+                {selected.cancelled ? "Un-cancel lecture" : "Cancel lecture"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() =>
+                  run(() =>
+                    selected.type === "assignment"
+                      ? deleteAssignment(selected.id, token)
+                      : deleteExam(selected.id, token),
+                  )
+                }
+                className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+              >
+                Delete
+              </button>
+            )}
+          </div>
+          {editError && <p className="mt-2 text-xs text-red-700">{editError}</p>}
+        </div>
+      )}
     </main>
   );
 }

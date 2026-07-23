@@ -53,6 +53,7 @@ def my_calendar(user: User = Depends(get_current_user), db: Session = Depends(ge
                 course_id=lec.course_id,
                 course_code=codes.get(lec.course_id, ""),
                 link=f"/lectures/{lec.id}" if lec.published else None,
+                cancelled=lec.cancelled,
             )
         )
     for a in db.scalars(select(Assignment).where(Assignment.course_id.in_(course_ids))):
