@@ -81,12 +81,17 @@ def seed():
 
         now = datetime.now(timezone.utc)
 
+        def at(days: int, hour: int, minute: int = 0) -> datetime:
+            return (now + timedelta(days=days)).replace(
+                hour=hour, minute=minute, second=0, microsecond=0
+            )
+
         lecture = Lecture(
             course_id=course.id,
             title="Ranking pages with PageRank",
             week=7,
             duration_s=67,
-            scheduled_at=now - timedelta(days=2),
+            scheduled_at=at(-2, 10),
             status=ProcessingStatus.published,
             published=True,
             uploaded_by=instructor.id,
@@ -105,7 +110,7 @@ def seed():
                 title="Implementing PageRank on a small crawl",
                 week=8,
                 duration_s=0,
-                scheduled_at=now + timedelta(days=3),
+                scheduled_at=at(3, 10),
                 status=ProcessingStatus.uploaded,
                 published=False,
                 uploaded_by=instructor.id,
@@ -116,21 +121,21 @@ def seed():
                 course_id=course.id,
                 title="Problem Set 3: Link analysis",
                 description="Compute PageRank on the provided graph and write up your findings.",
-                due_at=now + timedelta(days=5),
+                due_at=at(5, 23, 59),
             )
         )
         db.add(
             Assignment(
                 course_id=course.id,
                 title="Reading response: The anatomy of a search engine",
-                due_at=now + timedelta(days=9),
+                due_at=at(9, 23, 59),
             )
         )
         db.add(
             Exam(
                 course_id=course.id,
                 title="Midterm",
-                starts_at=now + timedelta(days=12),
+                starts_at=at(12, 9),
                 duration_min=90,
             )
         )
