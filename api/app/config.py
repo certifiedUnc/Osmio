@@ -5,6 +5,10 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://osmio:osmio@db:5432/osmio"
     cors_origins: str = "http://localhost:3000"
 
+    # Auth
+    jwt_secret: str = "dev-secret-change-me"
+    jwt_expire_minutes: int = 60 * 24 * 7
+
     # Cloudflare Stream
     cf_account_id: str = ""
     cf_stream_token: str = ""
