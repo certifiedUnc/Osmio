@@ -1,4 +1,32 @@
 services:
-  app:
-    build: .
-    container_name: my-project
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: osmio
+      POSTGRES_PASSWORD: osmio
+      POSTGRES_DB: osmio
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U osmio"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./api
+    environment:
+      DATABASE_URL: postgresql+psycopg://osmio:osmio@db:5432/osmio
+      CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api:/app
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
