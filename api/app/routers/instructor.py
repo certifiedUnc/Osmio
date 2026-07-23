@@ -4,9 +4,19 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import require_role
-from ..models import Announcement, Course, Lecture, ProcessingStatus, Role, User
+from ..models import Announcement, Assignment, Course, Exam, Lecture, ProcessingStatus, Role, User
 from ..pipeline import run_pipeline
-from ..schemas import AnnouncementIn, AnnouncementOut, CourseOut, LectureCreate, LectureSummary
+from ..schemas import (
+    AnnouncementIn,
+    AnnouncementOut,
+    AssignmentIn,
+    AssignmentOut,
+    CourseOut,
+    ExamIn,
+    ExamOut,
+    LectureCreate,
+    LectureSummary,
+)
 
 router = APIRouter(prefix="/instructor", tags=["instructor"])
 
@@ -44,6 +54,7 @@ def create_lecture(
         week=payload.week,
         duration_s=payload.duration_s,
         stream_uid=payload.stream_uid,
+        scheduled_at=payload.scheduled_at,
         uploaded_by=user.id,
         status=ProcessingStatus.uploaded,
     )
@@ -93,3 +104,51 @@ def post_announcement(
     db.commit()
     db.refresh(announcement)
     return announcement
+
+
+@router.post(
+    "/courses/{course_id}/assignments",
+    response_model=AssignmentOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_assignment(
+    course_id: int,
+    payload: AssignmentIn,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    _course_owned(db, course_id, user)
+    assignment = Assignment(
+        course_id=course_id,
+        title=payload.title,
+        description=payload.description,
+        due_at=payload.due_at,
+    )
+    db.add(assignment)
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
+@router.post(
+    "/courses/{course_id}/exams",
+    response_model=ExamOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_exam(
+    course_id: int,
+    payload: ExamIn,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    _course_owned(db, course_id, user)
+    exam = Exam(
+        course_id=course_id,
+        title=payload.title,
+        starts_at=payload.starts_at,
+        duration_min=payload.duration_min,
+    )
+    db.add(exam)
+    db.commit()
+    db.refresh(exam)
+    return exam

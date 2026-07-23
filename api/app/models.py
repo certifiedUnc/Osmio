@@ -85,6 +85,7 @@ class Lecture(Base):
     course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"))
     title: Mapped[str] = mapped_column(String(200))
     week: Mapped[int] = mapped_column(Integer, default=1)
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     stream_uid: Mapped[str] = mapped_column(String(64), default="")
     duration_s: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[ProcessingStatus] = mapped_column(
@@ -126,6 +127,28 @@ class Question(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     lecture: Mapped["Lecture"] = relationship(back_populates="questions")
+
+
+class Assignment(Base):
+    __tablename__ = "assignments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Exam(Base):
+    __tablename__ = "exams"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    duration_min: Mapped[int] = mapped_column(Integer, default=60)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Announcement(Base):

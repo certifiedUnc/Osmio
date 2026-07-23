@@ -22,6 +22,9 @@ export default function Nav() {
         </Link>
         {user && (
           <div className="flex items-center gap-4 text-sm">
+            <Link href="/calendar" className="text-neutral-600 hover:text-black">
+              Calendar
+            </Link>
             <span className="text-neutral-500">
               {user.full_name || user.email} ({user.role})
             </span>

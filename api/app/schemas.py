@@ -74,6 +74,7 @@ class LectureCreate(BaseModel):
     week: int = 1
     duration_s: int = 0
     stream_uid: str = ""
+    scheduled_at: datetime | None = None
 
 
 class LectureDetail(LectureSummary):
@@ -182,3 +183,47 @@ class LicenseOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AssignmentIn(BaseModel):
+    title: str
+    description: str = ""
+    due_at: datetime
+
+
+class AssignmentOut(BaseModel):
+    id: int
+    course_id: int
+    title: str
+    description: str
+    due_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ExamIn(BaseModel):
+    title: str
+    starts_at: datetime
+    duration_min: int = 60
+
+
+class ExamOut(BaseModel):
+    id: int
+    course_id: int
+    title: str
+    starts_at: datetime
+    duration_min: int
+
+    class Config:
+        from_attributes = True
+
+
+class CalendarEvent(BaseModel):
+    type: str  # lecture | assignment | exam
+    id: int
+    title: str
+    at: datetime
+    course_id: int
+    course_code: str
+    link: str | None = None
