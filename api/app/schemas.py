@@ -61,10 +61,19 @@ class LectureSummary(BaseModel):
     title: str
     week: int
     duration_s: int
+    status: str
     published: bool
 
     class Config:
         from_attributes = True
+
+
+class LectureCreate(BaseModel):
+    course_id: int
+    title: str
+    week: int = 1
+    duration_s: int = 0
+    stream_uid: str = ""
 
 
 class LectureDetail(LectureSummary):

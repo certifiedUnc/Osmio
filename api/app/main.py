@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .db import Base, engine
-from .routers import auth, lectures
+from .routers import auth, instructor, lectures
 from .seed import seed
 
 
@@ -27,6 +27,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(instructor.router)
 app.include_router(lectures.router)
 
 
