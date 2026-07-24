@@ -22,6 +22,11 @@ export default function Nav() {
         </Link>
         {user && (
           <div className="flex items-center gap-4 text-sm">
+            {user.role === "student" && (
+              <Link href="/assignments" className="text-neutral-600 hover:text-black">
+                Assignments
+              </Link>
+            )}
             <Link href="/calendar" className="text-neutral-600 hover:text-black">
               Calendar
             </Link>

@@ -1,10 +1,22 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import require_role
-from ..models import Announcement, Assignment, Course, Exam, Lecture, ProcessingStatus, Role, User
+from ..models import (
+    Announcement,
+    Assignment,
+    AssignmentSubmission,
+    Course,
+    Exam,
+    Lecture,
+    ProcessingStatus,
+    Role,
+    User,
+)
 from ..pipeline import run_pipeline
 from ..schemas import (
     AnnouncementIn,
@@ -16,9 +28,11 @@ from ..schemas import (
     ExamIn,
     ExamOut,
     ExamUpdate,
+    GradeIn,
     LectureCreate,
     LectureSummary,
     LectureUpdate,
+    SubmissionOut,
 )
 
 router = APIRouter(prefix="/instructor", tags=["instructor"])
@@ -235,3 +249,37 @@ def delete_exam(
     exam = _owned_or_404(db, db.get(Exam, exam_id), user)
     db.delete(exam)
     db.commit()
+
+
+@router.get("/assignments/{assignment_id}/submissions", response_model=list[SubmissionOut])
+def list_submissions(
+    assignment_id: int,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    assignment = _owned_or_404(db, db.get(Assignment, assignment_id), user)
+    return db.scalars(
+        select(AssignmentSubmission)
+        .where(AssignmentSubmission.assignment_id == assignment.id)
+        .order_by(AssignmentSubmission.submitted_at)
+    ).all()
+
+
+@router.post("/submissions/{submission_id}/grade", response_model=SubmissionOut)
+def grade_submission(
+    submission_id: int,
+    payload: GradeIn,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    submission = db.get(AssignmentSubmission, submission_id)
+    if submission is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "submission not found")
+    _owned_or_404(db, db.get(Assignment, submission.assignment_id), user)
+    submission.score = payload.score
+    submission.feedback = payload.feedback
+    submission.graded_by = user.id
+    submission.graded_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(submission)
+    return submission

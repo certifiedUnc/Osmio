@@ -7,10 +7,12 @@ import {
   createAssignment,
   createExam,
   createLecture,
+  getCourseAssignments,
   getLecture,
   getMyCourses,
   postAnnouncement,
   processLecture,
+  type Assignment,
   type Course,
   type LectureSummary,
 } from "@/lib/api";
@@ -89,6 +91,17 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
   const [examTitle, setExamTitle] = useState("");
   const [examStart, setExamStart] = useState("");
   const [assessMsg, setAssessMsg] = useState<string | null>(null);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+
+  const loadAssignments = useCallback(() => {
+    getCourseAssignments(course.id, token)
+      .then(setAssignments)
+      .catch(() => {});
+  }, [course.id, token]);
+
+  useEffect(() => {
+    loadAssignments();
+  }, [loadAssignments]);
 
   const mounted = useRef(true);
   useEffect(
@@ -190,6 +203,7 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
       setAsgTitle("");
       setAsgDue("");
       setAssessMsg("Assignment deadline added.");
+      loadAssignments();
     } catch {
       setAssessMsg("Could not add assignment.");
     }
@@ -341,7 +355,22 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
           <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
             Assignments and exams
           </h3>
-          <form onSubmit={submitAssignment} className="mt-2 flex flex-wrap items-center gap-2">
+          {assignments.length > 0 && (
+            <ul className="mt-2 divide-y divide-neutral-100">
+              {assignments.map((a) => (
+                <li key={a.id} className="flex items-center justify-between py-1.5 text-sm">
+                  <span className="text-neutral-800">{a.title}</span>
+                  <Link
+                    href={`/teach/assignments/${a.id}`}
+                    className="text-xs text-sky-700 hover:underline"
+                  >
+                    Grade
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form onSubmit={submitAssignment} className="mt-3 flex flex-wrap items-center gap-2">
             <input
               value={asgTitle}
               onChange={(e) => setAsgTitle(e.target.value)}

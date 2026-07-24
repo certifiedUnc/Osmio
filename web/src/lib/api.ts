@@ -241,6 +241,7 @@ export interface Assignment {
   title: string;
   description: string;
   due_at: string;
+  max_score: number;
 }
 
 export interface Exam {
@@ -249,6 +250,28 @@ export interface Exam {
   title: string;
   starts_at: string;
   duration_min: number;
+}
+
+export interface Submission {
+  id: number;
+  assignment_id: number;
+  student_id: number;
+  student: User;
+  body: string;
+  submitted_at: string;
+  score: number | null;
+  feedback: string;
+  graded_at: string | null;
+}
+
+export interface StudentAssignment {
+  id: number;
+  course_id: number;
+  title: string;
+  description: string;
+  due_at: string;
+  max_score: number;
+  submission: Submission | null;
 }
 
 export function createAssignment(
@@ -303,6 +326,41 @@ export function updateExam(
 
 export function deleteExam(examId: number, token: string): Promise<void> {
   return request(`/instructor/exams/${examId}`, authed(token, { method: "DELETE" }));
+}
+
+// --- Assignment submissions + grading ---
+export function getMyAssignments(token: string): Promise<StudentAssignment[]> {
+  return request("/me/assignments", authed(token));
+}
+
+export function getCourseAssignments(courseId: number, token: string): Promise<Assignment[]> {
+  return request(`/courses/${courseId}/assignments`, authed(token));
+}
+
+export function submitAssignment(
+  assignmentId: number,
+  body: string,
+  token: string,
+): Promise<Submission> {
+  return request(
+    `/assignments/${assignmentId}/submissions`,
+    authed(token, { method: "POST", body: JSON.stringify({ body }) }),
+  );
+}
+
+export function getSubmissions(assignmentId: number, token: string): Promise<Submission[]> {
+  return request(`/instructor/assignments/${assignmentId}/submissions`, authed(token));
+}
+
+export function gradeSubmission(
+  submissionId: number,
+  payload: { score: number; feedback: string },
+  token: string,
+): Promise<Submission> {
+  return request(
+    `/instructor/submissions/${submissionId}/grade`,
+    authed(token, { method: "POST", body: JSON.stringify(payload) }),
+  );
 }
 
 // --- Admin ---
