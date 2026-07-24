@@ -122,7 +122,6 @@ export default function LearnPage() {
   const initial = (user.full_name || user.email).charAt(0).toUpperCase();
   const navItems = [
     { label: "Courses", href: "/learn", active: true },
-    { label: "Assignments", href: "/assignments", active: false },
     { label: "Calendar", href: "/calendar", active: false },
   ];
 
