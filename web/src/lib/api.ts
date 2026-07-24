@@ -229,6 +229,7 @@ export interface CalendarEvent {
   id: number;
   title: string;
   at: string; // ISO datetime
+  end: string | null; // lectures/exams; assignments are deadlines
   course_id: number;
   course_code: string;
   link: string | null;

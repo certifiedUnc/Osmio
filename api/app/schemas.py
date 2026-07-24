@@ -225,6 +225,7 @@ class CalendarEvent(BaseModel):
     id: int
     title: str
     at: datetime
+    end: datetime | None = None  # lectures/exams; assignments are deadlines (no end)
     course_id: int
     course_code: str
     link: str | None = None

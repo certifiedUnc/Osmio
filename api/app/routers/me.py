@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -74,6 +74,7 @@ def my_calendar(user: User = Depends(get_current_user), db: Session = Depends(ge
                 id=lec.id,
                 title=lec.title,
                 at=lec.scheduled_at,
+                end=lec.scheduled_at + timedelta(minutes=50),
                 course_id=lec.course_id,
                 course_code=codes.get(lec.course_id, ""),
                 link=f"/lectures/{lec.id}" if lec.published else None,
@@ -98,6 +99,7 @@ def my_calendar(user: User = Depends(get_current_user), db: Session = Depends(ge
                 id=e.id,
                 title=e.title,
                 at=e.starts_at,
+                end=e.starts_at + timedelta(minutes=e.duration_min or 60),
                 course_id=e.course_id,
                 course_code=codes.get(e.course_id, ""),
             )
