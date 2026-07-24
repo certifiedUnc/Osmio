@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { getMyAssignments, submitAssignment, type StudentAssignment } from "@/lib/api";
@@ -74,7 +75,11 @@ function AssignmentCard({
     <section className="rounded-lg border border-neutral-200 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-medium text-neutral-900">{assignment.title}</h2>
+          <h2 className="font-medium text-neutral-900">
+            <Link href={`/assignments/${assignment.id}`} className="hover:text-sky-700 hover:underline">
+              {assignment.title}
+            </Link>
+          </h2>
           <p className="text-xs text-neutral-500">
             Due {new Date(assignment.due_at).toLocaleString()} &middot; {assignment.max_score} points
           </p>
