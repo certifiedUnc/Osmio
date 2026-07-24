@@ -198,6 +198,7 @@ export interface LectureCreate {
   week: number;
   duration_s: number;
   stream_uid?: string;
+  scheduled_at?: string; // ISO datetime
 }
 
 export function createLecture(payload: LectureCreate, token: string): Promise<LectureSummary> {
@@ -217,6 +218,91 @@ export function postAnnouncement(
     `/instructor/courses/${courseId}/announcements`,
     authed(token, { method: "POST", body: JSON.stringify(payload) }),
   );
+}
+
+export interface CalendarEvent {
+  type: "lecture" | "assignment" | "exam";
+  id: number;
+  title: string;
+  at: string; // ISO datetime
+  course_id: number;
+  course_code: string;
+  link: string | null;
+  cancelled: boolean;
+}
+
+export function getCalendar(token: string): Promise<CalendarEvent[]> {
+  return request("/me/calendar", authed(token));
+}
+
+export interface Assignment {
+  id: number;
+  course_id: number;
+  title: string;
+  description: string;
+  due_at: string;
+}
+
+export interface Exam {
+  id: number;
+  course_id: number;
+  title: string;
+  starts_at: string;
+  duration_min: number;
+}
+
+export function createAssignment(
+  courseId: number,
+  payload: { title: string; description: string; due_at: string },
+  token: string,
+): Promise<Assignment> {
+  return request(
+    `/instructor/courses/${courseId}/assignments`,
+    authed(token, { method: "POST", body: JSON.stringify(payload) }),
+  );
+}
+
+export function createExam(
+  courseId: number,
+  payload: { title: string; starts_at: string; duration_min: number },
+  token: string,
+): Promise<Exam> {
+  return request(
+    `/instructor/courses/${courseId}/exams`,
+    authed(token, { method: "POST", body: JSON.stringify(payload) }),
+  );
+}
+
+export function updateLecture(
+  lectureId: number,
+  payload: { scheduled_at?: string; cancelled?: boolean },
+  token: string,
+): Promise<LectureSummary> {
+  return request(`/instructor/lectures/${lectureId}`, authed(token, { method: "PATCH", body: JSON.stringify(payload) }));
+}
+
+export function updateAssignment(
+  assignmentId: number,
+  payload: { title?: string; due_at?: string },
+  token: string,
+): Promise<Assignment> {
+  return request(`/instructor/assignments/${assignmentId}`, authed(token, { method: "PATCH", body: JSON.stringify(payload) }));
+}
+
+export function deleteAssignment(assignmentId: number, token: string): Promise<void> {
+  return request(`/instructor/assignments/${assignmentId}`, authed(token, { method: "DELETE" }));
+}
+
+export function updateExam(
+  examId: number,
+  payload: { title?: string; starts_at?: string },
+  token: string,
+): Promise<Exam> {
+  return request(`/instructor/exams/${examId}`, authed(token, { method: "PATCH", body: JSON.stringify(payload) }));
+}
+
+export function deleteExam(examId: number, token: string): Promise<void> {
+  return request(`/instructor/exams/${examId}`, authed(token, { method: "DELETE" }));
 }
 
 // --- Admin ---

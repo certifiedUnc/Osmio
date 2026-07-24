@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  createAssignment,
+  createExam,
   createLecture,
   getLecture,
   getMyCourses,
@@ -72,6 +74,7 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
   const [title, setTitle] = useState("");
   const [week, setWeek] = useState(1);
   const [duration, setDuration] = useState(60);
+  const [schedule, setSchedule] = useState("");
   const [adding, setAdding] = useState(false);
   const [opError, setOpError] = useState<string | null>(null);
 
@@ -80,6 +83,12 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
   const [posting, setPosting] = useState(false);
   const [posted, setPosted] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
+
+  const [asgTitle, setAsgTitle] = useState("");
+  const [asgDue, setAsgDue] = useState("");
+  const [examTitle, setExamTitle] = useState("");
+  const [examStart, setExamStart] = useState("");
+  const [assessMsg, setAssessMsg] = useState<string | null>(null);
 
   const mounted = useRef(true);
   useEffect(
@@ -117,11 +126,18 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
     setOpError(null);
     try {
       const l = await createLecture(
-        { course_id: course.id, title: title.trim(), week, duration_s: duration },
+        {
+          course_id: course.id,
+          title: title.trim(),
+          week,
+          duration_s: duration,
+          scheduled_at: schedule ? new Date(schedule).toISOString() : undefined,
+        },
         token,
       );
       setLectures((prev) => [...prev, l]);
       setTitle("");
+      setSchedule("");
     } catch {
       setOpError("Could not add lecture. Please try again.");
     } finally {
@@ -158,6 +174,42 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
       setPostError("Could not post announcement. Please try again.");
     } finally {
       setPosting(false);
+    }
+  }
+
+  async function submitAssignment(e: React.FormEvent) {
+    e.preventDefault();
+    if (!asgTitle.trim() || !asgDue) return;
+    setAssessMsg(null);
+    try {
+      await createAssignment(
+        course.id,
+        { title: asgTitle.trim(), description: "", due_at: new Date(asgDue).toISOString() },
+        token,
+      );
+      setAsgTitle("");
+      setAsgDue("");
+      setAssessMsg("Assignment deadline added.");
+    } catch {
+      setAssessMsg("Could not add assignment.");
+    }
+  }
+
+  async function submitExam(e: React.FormEvent) {
+    e.preventDefault();
+    if (!examTitle.trim() || !examStart) return;
+    setAssessMsg(null);
+    try {
+      await createExam(
+        course.id,
+        { title: examTitle.trim(), starts_at: new Date(examStart).toISOString(), duration_min: 60 },
+        token,
+      );
+      setExamTitle("");
+      setExamStart("");
+      setAssessMsg("Exam added.");
+    } catch {
+      setAssessMsg("Could not add exam.");
     }
   }
 
@@ -227,6 +279,15 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
                 className="ml-1 w-20 rounded border border-neutral-300 px-2 py-1.5 text-sm"
               />
             </label>
+            <label className="text-xs text-neutral-500">
+              Date
+              <input
+                type="datetime-local"
+                value={schedule}
+                onChange={(e) => setSchedule(e.target.value)}
+                className="ml-1 rounded border border-neutral-300 px-2 py-1.5 text-sm"
+              />
+            </label>
             <button
               type="submit"
               disabled={adding || !title.trim()}
@@ -274,6 +335,55 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
               {postError && <span className="text-xs text-red-700">{postError}</span>}
             </div>
           </form>
+        </div>
+
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+            Assignments and exams
+          </h3>
+          <form onSubmit={submitAssignment} className="mt-2 flex flex-wrap items-center gap-2">
+            <input
+              value={asgTitle}
+              onChange={(e) => setAsgTitle(e.target.value)}
+              placeholder="Assignment title"
+              className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1.5 text-sm outline-none focus:border-neutral-500"
+            />
+            <input
+              type="datetime-local"
+              value={asgDue}
+              onChange={(e) => setAsgDue(e.target.value)}
+              className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+            />
+            <button
+              type="submit"
+              disabled={!asgTitle.trim() || !asgDue}
+              className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+            >
+              Add deadline
+            </button>
+          </form>
+          <form onSubmit={submitExam} className="mt-2 flex flex-wrap items-center gap-2">
+            <input
+              value={examTitle}
+              onChange={(e) => setExamTitle(e.target.value)}
+              placeholder="Exam title"
+              className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1.5 text-sm outline-none focus:border-neutral-500"
+            />
+            <input
+              type="datetime-local"
+              value={examStart}
+              onChange={(e) => setExamStart(e.target.value)}
+              className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+            />
+            <button
+              type="submit"
+              disabled={!examTitle.trim() || !examStart}
+              className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+            >
+              Add exam
+            </button>
+          </form>
+          {assessMsg && <p className="mt-2 text-xs text-neutral-600">{assessMsg}</p>}
         </div>
       </div>
     </section>

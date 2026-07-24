@@ -4,12 +4,16 @@ Demo logins (all password "password"): admin@osmio.dev, instructor@osmio.dev, st
 The transcript below is a stand-in; the real one comes from the pipeline (Groq).
 """
 
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import select
 
 from .db import SessionLocal
 from .models import (
+    Assignment,
     Course,
     Enrollment,
+    Exam,
     Lecture,
     ProcessingStatus,
     Role,
@@ -75,11 +79,19 @@ def seed():
 
         db.add(Enrollment(course_id=course.id, student_id=student.id))
 
+        now = datetime.now(timezone.utc)
+
+        def at(days: int, hour: int, minute: int = 0) -> datetime:
+            return (now + timedelta(days=days)).replace(
+                hour=hour, minute=minute, second=0, microsecond=0
+            )
+
         lecture = Lecture(
             course_id=course.id,
             title="Ranking pages with PageRank",
             week=7,
             duration_s=67,
+            scheduled_at=at(-2, 10),
             status=ProcessingStatus.published,
             published=True,
             uploaded_by=instructor.id,
@@ -90,6 +102,43 @@ def seed():
 
         for start, end, text in DEMO_TRANSCRIPT:
             db.add(TranscriptSegment(lecture_id=lecture.id, start_ms=start, end_ms=end, text=text))
+
+        # An upcoming lecture plus deadlines and an exam, so the calendar has content.
+        db.add(
+            Lecture(
+                course_id=course.id,
+                title="Implementing PageRank on a small crawl",
+                week=8,
+                duration_s=0,
+                scheduled_at=at(3, 10),
+                status=ProcessingStatus.uploaded,
+                published=False,
+                uploaded_by=instructor.id,
+            )
+        )
+        db.add(
+            Assignment(
+                course_id=course.id,
+                title="Problem Set 3: Link analysis",
+                description="Compute PageRank on the provided graph and write up your findings.",
+                due_at=at(5, 23, 59),
+            )
+        )
+        db.add(
+            Assignment(
+                course_id=course.id,
+                title="Reading response: The anatomy of a search engine",
+                due_at=at(9, 23, 59),
+            )
+        )
+        db.add(
+            Exam(
+                course_id=course.id,
+                title="Midterm",
+                starts_at=at(12, 9),
+                duration_min=90,
+            )
+        )
         db.commit()
     finally:
         db.close()

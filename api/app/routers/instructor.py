@@ -4,9 +4,22 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import require_role
-from ..models import Announcement, Course, Lecture, ProcessingStatus, Role, User
+from ..models import Announcement, Assignment, Course, Exam, Lecture, ProcessingStatus, Role, User
 from ..pipeline import run_pipeline
-from ..schemas import AnnouncementIn, AnnouncementOut, CourseOut, LectureCreate, LectureSummary
+from ..schemas import (
+    AnnouncementIn,
+    AnnouncementOut,
+    AssignmentIn,
+    AssignmentOut,
+    AssignmentUpdate,
+    CourseOut,
+    ExamIn,
+    ExamOut,
+    ExamUpdate,
+    LectureCreate,
+    LectureSummary,
+    LectureUpdate,
+)
 
 router = APIRouter(prefix="/instructor", tags=["instructor"])
 
@@ -44,6 +57,7 @@ def create_lecture(
         week=payload.week,
         duration_s=payload.duration_s,
         stream_uid=payload.stream_uid,
+        scheduled_at=payload.scheduled_at,
         uploaded_by=user.id,
         status=ProcessingStatus.uploaded,
     )
@@ -93,3 +107,131 @@ def post_announcement(
     db.commit()
     db.refresh(announcement)
     return announcement
+
+
+@router.post(
+    "/courses/{course_id}/assignments",
+    response_model=AssignmentOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_assignment(
+    course_id: int,
+    payload: AssignmentIn,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    _course_owned(db, course_id, user)
+    assignment = Assignment(
+        course_id=course_id,
+        title=payload.title,
+        description=payload.description,
+        due_at=payload.due_at,
+    )
+    db.add(assignment)
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
+@router.post(
+    "/courses/{course_id}/exams",
+    response_model=ExamOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_exam(
+    course_id: int,
+    payload: ExamIn,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    _course_owned(db, course_id, user)
+    exam = Exam(
+        course_id=course_id,
+        title=payload.title,
+        starts_at=payload.starts_at,
+        duration_min=payload.duration_min,
+    )
+    db.add(exam)
+    db.commit()
+    db.refresh(exam)
+    return exam
+
+
+def _owned_or_404(db: Session, obj, user: User):
+    if obj is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not found")
+    _course_owned(db, obj.course_id, user)
+    return obj
+
+
+@router.patch("/lectures/{lecture_id}", response_model=LectureSummary)
+def update_lecture(
+    lecture_id: int,
+    payload: LectureUpdate,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    lecture = _owned_or_404(db, db.get(Lecture, lecture_id), user)
+    if payload.scheduled_at is not None:
+        lecture.scheduled_at = payload.scheduled_at
+    if payload.cancelled is not None:
+        lecture.cancelled = payload.cancelled
+    db.commit()
+    db.refresh(lecture)
+    return lecture
+
+
+@router.patch("/assignments/{assignment_id}", response_model=AssignmentOut)
+def update_assignment(
+    assignment_id: int,
+    payload: AssignmentUpdate,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    assignment = _owned_or_404(db, db.get(Assignment, assignment_id), user)
+    if payload.title is not None:
+        assignment.title = payload.title
+    if payload.due_at is not None:
+        assignment.due_at = payload.due_at
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
+@router.delete("/assignments/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_assignment(
+    assignment_id: int,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    assignment = _owned_or_404(db, db.get(Assignment, assignment_id), user)
+    db.delete(assignment)
+    db.commit()
+
+
+@router.patch("/exams/{exam_id}", response_model=ExamOut)
+def update_exam(
+    exam_id: int,
+    payload: ExamUpdate,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    exam = _owned_or_404(db, db.get(Exam, exam_id), user)
+    if payload.title is not None:
+        exam.title = payload.title
+    if payload.starts_at is not None:
+        exam.starts_at = payload.starts_at
+    db.commit()
+    db.refresh(exam)
+    return exam
+
+
+@router.delete("/exams/{exam_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_exam(
+    exam_id: int,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    exam = _owned_or_404(db, db.get(Exam, exam_id), user)
+    db.delete(exam)
+    db.commit()
