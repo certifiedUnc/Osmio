@@ -19,9 +19,9 @@ services:
     build: ./api
     environment:
       DATABASE_URL: postgresql+psycopg://osmio:osmio@db:5432/osmio
-      CORS_ORIGINS: http://localhost:3000
+      CORS_ORIGINS: ${WEB_ORIGIN:-http://localhost:3000}
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     volumes:
       - ./api:/app
     depends_on:
