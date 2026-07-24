@@ -367,6 +367,41 @@ export function gradeSubmission(
   );
 }
 
+// --- Attendance (QR / code) ---
+export interface AttendanceSession {
+  id: number;
+  lecture_id: number;
+  code: string;
+  expires_at: string;
+}
+
+export interface RosterStudent {
+  id: number;
+  full_name: string;
+  email: string;
+  present: boolean;
+}
+
+export interface AttendanceRoster {
+  id: number;
+  lecture_id: number;
+  code: string;
+  expires_at: string;
+  students: RosterStudent[];
+}
+
+export function openAttendance(lectureId: number, token: string): Promise<AttendanceSession> {
+  return request(`/instructor/lectures/${lectureId}/attendance`, authed(token, { method: "POST" }));
+}
+
+export function getAttendanceRoster(sessionId: number, token: string): Promise<AttendanceRoster> {
+  return request(`/instructor/attendance/${sessionId}`, authed(token));
+}
+
+export function markAttendance(code: string, token: string): Promise<{ lecture_title: string }> {
+  return request("/attendance/mark", authed(token, { method: "POST", body: JSON.stringify({ code }) }));
+}
+
 // --- Admin ---
 export function adminListUsers(token: string): Promise<User[]> {
   return request("/admin/users", authed(token));

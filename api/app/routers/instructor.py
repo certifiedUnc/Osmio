@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+import secrets
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
@@ -10,7 +11,10 @@ from ..models import (
     Announcement,
     Assignment,
     AssignmentSubmission,
+    AttendanceRecord,
+    AttendanceSession,
     Course,
+    Enrollment,
     Exam,
     Lecture,
     ProcessingStatus,
@@ -24,6 +28,8 @@ from ..schemas import (
     AssignmentIn,
     AssignmentOut,
     AssignmentUpdate,
+    AttendanceRosterOut,
+    AttendanceSessionOut,
     CourseOut,
     ExamIn,
     ExamOut,
@@ -32,6 +38,7 @@ from ..schemas import (
     LectureCreate,
     LectureSummary,
     LectureUpdate,
+    RosterStudent,
     SubmissionOut,
 )
 
@@ -283,3 +290,64 @@ def grade_submission(
     db.commit()
     db.refresh(submission)
     return submission
+
+
+# Unambiguous codes: no 0/O/1/I.
+_ATTENDANCE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+@router.post("/lectures/{lecture_id}/attendance", response_model=AttendanceSessionOut)
+def open_attendance(
+    lecture_id: int,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    lecture = _owned_or_404(db, db.get(Lecture, lecture_id), user)
+    code = "".join(secrets.choice(_ATTENDANCE_ALPHABET) for _ in range(6))
+    session = AttendanceSession(
+        lecture_id=lecture.id,
+        code=code,
+        created_by=user.id,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+@router.get("/attendance/{session_id}", response_model=AttendanceRosterOut)
+def attendance_roster(
+    session_id: int,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    session = db.get(AttendanceSession, session_id)
+    if session is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "session not found")
+    lecture = _owned_or_404(db, db.get(Lecture, session.lecture_id), user)
+
+    present_ids = set(
+        db.scalars(
+            select(AttendanceRecord.student_id).where(AttendanceRecord.session_id == session.id)
+        )
+    )
+    enrolled = db.scalars(
+        select(User)
+        .join(Enrollment, Enrollment.student_id == User.id)
+        .where(Enrollment.course_id == lecture.course_id)
+        .order_by(User.full_name)
+    ).all()
+
+    return AttendanceRosterOut(
+        id=session.id,
+        lecture_id=session.lecture_id,
+        code=session.code,
+        expires_at=session.expires_at,
+        students=[
+            RosterStudent(
+                id=s.id, full_name=s.full_name, email=s.email, present=s.id in present_ids
+            )
+            for s in enrolled
+        ],
+    )

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -10,6 +11,7 @@ import {
   getCourseAssignments,
   getLecture,
   getMyCourses,
+  openAttendance,
   postAnnouncement,
   processLecture,
   type Assignment,
@@ -102,6 +104,17 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
   useEffect(() => {
     loadAssignments();
   }, [loadAssignments]);
+
+  const router = useRouter();
+  async function takeAttendance(lectureId: number) {
+    setOpError(null);
+    try {
+      const session = await openAttendance(lectureId, token);
+      router.push(`/teach/attendance/${session.id}`);
+    } catch {
+      setOpError("Could not start attendance.");
+    }
+  }
 
   const mounted = useRef(true);
   useEffect(
@@ -258,6 +271,13 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
                       Process
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => takeAttendance(l.id)}
+                    className="rounded border border-neutral-300 px-2 py-0.5 text-xs hover:bg-neutral-50"
+                  >
+                    Attendance
+                  </button>
                 </span>
               </li>
             ))}

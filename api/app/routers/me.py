@@ -1,15 +1,17 @@
-from fastapi import APIRouter, Depends
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import get_current_user
-from fastapi import HTTPException, status
-
 from ..models import (
     Announcement,
     Assignment,
     AssignmentSubmission,
+    AttendanceRecord,
+    AttendanceSession,
     Course,
     Enrollment,
     Exam,
@@ -20,6 +22,8 @@ from ..models import (
 from ..schemas import (
     AnnouncementOut,
     AssignmentOut,
+    AttendanceMarkIn,
+    AttendanceMarkOut,
     CalendarEvent,
     CourseOut,
     StudentAssignmentOut,
@@ -197,3 +201,42 @@ def submit_assignment(
     db.commit()
     db.refresh(submission)
     return submission
+
+
+@router.post("/attendance/mark", response_model=AttendanceMarkOut)
+def mark_attendance(
+    payload: AttendanceMarkIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    code = payload.code.strip().upper()
+    session = db.scalar(
+        select(AttendanceSession)
+        .where(AttendanceSession.code == code)
+        .order_by(AttendanceSession.id.desc())
+    )
+    if session is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "invalid code")
+    if session.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "this code has expired")
+
+    lecture = db.get(Lecture, session.lecture_id)
+    enrolled = db.scalar(
+        select(Enrollment).where(
+            Enrollment.course_id == lecture.course_id,
+            Enrollment.student_id == user.id,
+        )
+    )
+    if user.role != Role.student or enrolled is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not enrolled in this course")
+
+    existing = db.scalar(
+        select(AttendanceRecord).where(
+            AttendanceRecord.session_id == session.id,
+            AttendanceRecord.student_id == user.id,
+        )
+    )
+    if existing is None:
+        db.add(AttendanceRecord(session_id=session.id, student_id=user.id))
+        db.commit()
+    return AttendanceMarkOut(lecture_title=lecture.title)

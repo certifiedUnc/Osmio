@@ -278,3 +278,36 @@ class StudentAssignmentOut(BaseModel):
     due_at: datetime
     max_score: int
     submission: SubmissionOut | None = None
+
+
+class AttendanceSessionOut(BaseModel):
+    id: int
+    lecture_id: int
+    code: str
+    expires_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AttendanceMarkIn(BaseModel):
+    code: str
+
+
+class AttendanceMarkOut(BaseModel):
+    lecture_title: str
+
+
+class RosterStudent(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    present: bool
+
+
+class AttendanceRosterOut(BaseModel):
+    id: int
+    lecture_id: int
+    code: str
+    expires_at: datetime
+    students: list[RosterStudent]

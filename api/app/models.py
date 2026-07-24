@@ -183,6 +183,32 @@ class Announcement(Base):
     course: Mapped["Course"] = relationship(back_populates="announcements")
 
 
+class AttendanceSession(Base):
+    __tablename__ = "attendance_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    lecture_id: Mapped[int] = mapped_column(ForeignKey("lectures.id"), index=True)
+    code: Mapped[str] = mapped_column(String(12), index=True)
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    lecture: Mapped["Lecture"] = relationship()
+    records: Mapped[list["AttendanceRecord"]] = relationship(back_populates="session")
+
+
+class AttendanceRecord(Base):
+    __tablename__ = "attendance_records"
+    __table_args__ = (UniqueConstraint("session_id", "student_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("attendance_sessions.id"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    marked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    session: Mapped["AttendanceSession"] = relationship(back_populates="records")
+
+
 class Partner(Base):
     __tablename__ = "partners"
 
