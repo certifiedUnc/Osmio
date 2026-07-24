@@ -95,6 +95,7 @@ export interface Course {
   code: string;
   title: string;
   term: string;
+  instructor_name: string | null;
   lectures: LectureSummary[];
 }
 
