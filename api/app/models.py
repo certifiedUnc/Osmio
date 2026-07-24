@@ -59,12 +59,17 @@ class Course(Base):
     instructor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     subject: Mapped["Subject | None"] = relationship(back_populates="courses")
+    instructor: Mapped["User | None"] = relationship(foreign_keys=[instructor_id])
     lectures: Mapped[list["Lecture"]] = relationship(
         back_populates="course", order_by="Lecture.week"
     )
     announcements: Mapped[list["Announcement"]] = relationship(
         back_populates="course", order_by="Announcement.created_at.desc()"
     )
+
+    @property
+    def instructor_name(self) -> str | None:
+        return self.instructor.full_name if self.instructor else None
 
 
 class Enrollment(Base):

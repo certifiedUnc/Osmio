@@ -87,6 +87,7 @@ class CourseOut(BaseModel):
     code: str
     title: str
     term: str
+    instructor_name: str | None = None
     lectures: list[LectureSummary]
 
     class Config:
