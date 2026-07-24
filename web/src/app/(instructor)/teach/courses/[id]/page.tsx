@@ -263,7 +263,7 @@ export default function InstructorCoursePage({ params }: { params: Promise<{ id:
                 </div>
               </div>
             </div>
-            <Link href="/teach" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 20px", border: "none", borderRadius: 10, background: INDIGO, color: "#fff", fontSize: 14, fontWeight: 600, boxShadow: "0 8px 20px -8px rgba(79,70,229,.6)" }}>
+            <Link href="/teach/manage" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 20px", border: "none", borderRadius: 10, background: INDIGO, color: "#fff", fontSize: 14, fontWeight: 600, boxShadow: "0 8px 20px -8px rgba(79,70,229,.6)" }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
               Upload lecture
             </Link>
@@ -306,7 +306,7 @@ export default function InstructorCoursePage({ params }: { params: Promise<{ id:
                       <span className={grotesk.className} style={{ fontSize: 16, fontWeight: 600, color: "var(--text)" }}>Week {sec.week}</span>
                       <span style={{ fontSize: 12.5, color: "var(--faint)" }}>{pub}/{sec.items.length} published</span>
                     </div>
-                    <Link href="/teach" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 13px", border: "1px solid var(--border)", borderRadius: 9, background: "var(--surface)", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+                    <Link href="/teach/manage" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 13px", border: "1px solid var(--border)", borderRadius: 9, background: "var(--surface)", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
                       Add lecture
                     </Link>
