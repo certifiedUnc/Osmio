@@ -7,10 +7,11 @@ import { RequireRole } from "@/lib/auth";
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  // The student home (/learn) ships its own full-width header; other pages use the shared nav.
+  // Pages that ship their own full-width header (/learn, an assignment detail) skip the shared nav.
+  const ownsHeader = pathname === "/learn" || /^\/assignments\/[^/]+$/.test(pathname);
   return (
     <RequireRole role="student">
-      {pathname !== "/learn" && <Nav />}
+      {!ownsHeader && <Nav />}
       {children}
     </RequireRole>
   );
