@@ -229,7 +229,7 @@ export default function LecturePage({ params }: { params: Promise<{ id: string }
           {course && (
             <>
               <Chevron />
-              <span style={{ color: "var(--muted)", fontWeight: 500 }}>{course.code}: {course.title}</span>
+              <Link href={coursesHref} style={{ color: "var(--muted)", fontWeight: 500 }}>{course.code}: {course.title}</Link>
             </>
           )}
           <Chevron />
