@@ -2,18 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   createAssignment,
   createExam,
   createLecture,
   getCourseAssignments,
-  getLecture,
   getMyCourses,
   openAttendance,
   postAnnouncement,
-  processLecture,
   type Assignment,
   type Course,
   type LectureSummary,
@@ -119,35 +117,6 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
     }
   }
 
-  const mounted = useRef(true);
-  useEffect(
-    () => () => {
-      mounted.current = false;
-    },
-    [],
-  );
-
-  const poll = useCallback((lectureId: number) => {
-    let tries = 0;
-    const tick = async () => {
-      if (!mounted.current) return;
-      tries += 1;
-      try {
-        const l = await getLecture(lectureId);
-        if (!mounted.current) return;
-        setLectures((prev) =>
-          prev.map((x) => (x.id === lectureId ? { ...x, status: l.status, published: l.published } : x)),
-        );
-        if (l.status !== "published" && l.status !== "failed" && tries < 12) {
-          setTimeout(tick, 1500);
-        }
-      } catch {
-        /* stop polling */
-      }
-    };
-    setTimeout(tick, 1000);
-  }, []);
-
   async function addLecture(e: React.FormEvent) {
     e.preventDefault();
     if (adding || !title.trim()) return;
@@ -174,19 +143,8 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
     }
   }
 
-  async function runPipeline(lectureId: number) {
-    const prev = lectures.find((x) => x.id === lectureId);
-    setOpError(null);
-    setLectures((cur) =>
-      cur.map((x) => (x.id === lectureId ? { ...x, status: "uploaded", published: false } : x)),
-    );
-    try {
-      await processLecture(lectureId, token);
-      poll(lectureId);
-    } catch {
-      if (prev) setLectures((cur) => cur.map((x) => (x.id === lectureId ? prev : x)));
-      setOpError("Could not start processing. Please try again.");
-    }
+  function openProcessing(lectureId: number) {
+    router.push(`/teach/lectures/${lectureId}/processing`);
   }
 
   async function submitAnnouncement(e: React.FormEvent) {
@@ -271,8 +229,8 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => runPipeline(l.id)}
-                      className="rounded bg-neutral-900 px-2 py-0.5 text-xs font-medium text-white"
+                      onClick={() => openProcessing(l.id)}
+                      className="rounded bg-indigo-600 px-2 py-0.5 text-xs font-medium text-white"
                     >
                       Process
                     </button>

@@ -3,15 +3,13 @@
 import { Instrument_Sans, Space_Grotesk } from "next/font/google";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getCourseAssignments,
   getCourseStudents,
-  getLecture,
   getMyCourses,
   getSubmissions,
-  processLecture,
   type Assignment,
   type Course,
   type LectureSummary,
@@ -140,29 +138,8 @@ export default function InstructorCoursePage({ params }: { params: Promise<{ id:
       .catch(() => {});
   }, [token, courseId]);
 
-  const poll = useCallback((lectureId: number, tries = 0) => {
-    setTimeout(async () => {
-      if (!mounted.current) return;
-      try {
-        const l = await getLecture(lectureId);
-        if (!mounted.current) return;
-        setLectures((prev) => prev.map((x) => (x.id === lectureId ? { ...x, status: l.status, published: l.published } : x)));
-        if (l.status !== "published" && l.status !== "failed" && tries < 10) poll(lectureId, tries + 1);
-      } catch {
-        /* stop */
-      }
-    }, 1500);
-  }, []);
-
-  async function process(lectureId: number) {
-    if (!token) return;
-    setLectures((prev) => prev.map((x) => (x.id === lectureId ? { ...x, status: "normalizing", published: false } : x)));
-    try {
-      await processLecture(lectureId, token);
-      poll(lectureId);
-    } catch {
-      /* leave as is */
-    }
+  function openProcessing(lectureId: number) {
+    router.push(`/teach/lectures/${lectureId}/processing`);
   }
 
   const sections = useMemo(() => {
@@ -327,7 +304,7 @@ export default function InstructorCoursePage({ params }: { params: Promise<{ id:
                           {l.published ? (
                             <Link href={`/lectures/${l.id}`} style={{ flexShrink: 0, padding: "8px 14px", border: "1px solid var(--border)", borderRadius: 9, background: "var(--surface)", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>View</Link>
                           ) : (
-                            <button type="button" onClick={() => process(l.id)} disabled={l.status !== "uploaded" && l.status !== "failed"} style={{ flexShrink: 0, padding: "8px 14px", border: "none", borderRadius: 9, background: INDIGO, color: "#fff", fontSize: 13, fontWeight: 600, cursor: l.status === "uploaded" || l.status === "failed" ? "pointer" : "default", opacity: l.status === "uploaded" || l.status === "failed" ? 1 : 0.5 }}>{l.status === "uploaded" || l.status === "failed" ? "Process" : "Working"}</button>
+                            <button type="button" onClick={() => openProcessing(l.id)} style={{ flexShrink: 0, padding: "8px 14px", border: "none", borderRadius: 9, background: INDIGO, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{l.status === "uploaded" ? "Process" : "Progress"}</button>
                           )}
                         </div>
                       );
