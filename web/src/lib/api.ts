@@ -145,6 +145,10 @@ export function getLecture(id: number): Promise<LectureDetail> {
   return request<LectureDetail>(`/lectures/${id}`, { next: { revalidate: 60 } });
 }
 
+export function transcriptUrl(lectureId: number, format: "txt" | "pdf"): string {
+  return `${API_BASE}/lectures/${lectureId}/transcript.${format}`;
+}
+
 export function getQuestions(lectureId: number): Promise<Question[]> {
   return request<Question[]>(`/lectures/${lectureId}/questions`, { cache: "no-store" });
 }
