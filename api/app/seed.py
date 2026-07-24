@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from .db import SessionLocal
 from .models import (
+    Announcement,
     Assignment,
     AssignmentSubmission,
     Course,
@@ -146,6 +147,30 @@ def seed():
                 starts_at=at(12, 9),
                 duration_min=90,
             )
+        )
+
+        db.add_all(
+            [
+                Announcement(course_id=course.id, author_id=instructor.id, title="Problem set 3 posted, due next week", body="Details are on the assignments page."),
+                Announcement(course_id=course.id, author_id=instructor.id, title="Guest lecture moved to Thursday", body="A guest speaker will cover ranking systems in industry."),
+            ]
+        )
+
+        # A couple more enrolled courses so the dashboard has breadth.
+        stat = Course(code="STAT210", title="Applied Statistics", term="2026-Autumn", instructor_id=instructor.id)
+        hist = Course(code="HIST140", title="Modern World History", term="2026-Autumn", instructor_id=instructor.id)
+        db.add_all([stat, hist])
+        db.flush()
+        db.add_all(
+            [
+                Enrollment(course_id=stat.id, student_id=student.id),
+                Enrollment(course_id=hist.id, student_id=student.id),
+                Lecture(course_id=stat.id, title="Hypothesis testing in practice", week=7, duration_s=2460, scheduled_at=at(-1, 11), status=ProcessingStatus.published, published=True, uploaded_by=instructor.id),
+                Lecture(course_id=hist.id, title="The interwar period", week=7, duration_s=3300, scheduled_at=at(-1, 14), status=ProcessingStatus.published, published=True, uploaded_by=instructor.id),
+                Announcement(course_id=stat.id, author_id=instructor.id, title="Midterm project proposal guidelines", body="Proposals are due in two weeks."),
+                Assignment(course_id=stat.id, title="Midterm project proposal", due_at=at(6, 23, 59)),
+                Assignment(course_id=hist.id, title="Reading response 4", due_at=at(7, 23, 59)),
+            ]
         )
         db.commit()
     finally:
