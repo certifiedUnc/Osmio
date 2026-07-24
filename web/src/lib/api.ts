@@ -358,6 +358,10 @@ export function getSubmissions(assignmentId: number, token: string): Promise<Sub
   return request(`/instructor/assignments/${assignmentId}/submissions`, authed(token));
 }
 
+export function getCourseStudents(courseId: number, token: string): Promise<User[]> {
+  return request(`/instructor/courses/${courseId}/students`, authed(token));
+}
+
 export function gradeSubmission(
   submissionId: number,
   payload: { score: number; feedback: string },
