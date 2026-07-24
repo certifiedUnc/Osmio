@@ -1,10 +1,26 @@
+import secrets
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import require_role
-from ..models import Announcement, Assignment, Course, Exam, Lecture, ProcessingStatus, Role, User
+from ..models import (
+    Announcement,
+    Assignment,
+    AssignmentSubmission,
+    AttendanceRecord,
+    AttendanceSession,
+    Course,
+    Enrollment,
+    Exam,
+    Lecture,
+    ProcessingStatus,
+    Role,
+    User,
+)
 from ..pipeline import run_pipeline
 from ..schemas import (
     AnnouncementIn,
@@ -12,13 +28,18 @@ from ..schemas import (
     AssignmentIn,
     AssignmentOut,
     AssignmentUpdate,
+    AttendanceRosterOut,
+    AttendanceSessionOut,
     CourseOut,
     ExamIn,
     ExamOut,
     ExamUpdate,
+    GradeIn,
     LectureCreate,
     LectureSummary,
     LectureUpdate,
+    RosterStudent,
+    SubmissionOut,
 )
 
 router = APIRouter(prefix="/instructor", tags=["instructor"])
@@ -235,3 +256,98 @@ def delete_exam(
     exam = _owned_or_404(db, db.get(Exam, exam_id), user)
     db.delete(exam)
     db.commit()
+
+
+@router.get("/assignments/{assignment_id}/submissions", response_model=list[SubmissionOut])
+def list_submissions(
+    assignment_id: int,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    assignment = _owned_or_404(db, db.get(Assignment, assignment_id), user)
+    return db.scalars(
+        select(AssignmentSubmission)
+        .where(AssignmentSubmission.assignment_id == assignment.id)
+        .order_by(AssignmentSubmission.submitted_at)
+    ).all()
+
+
+@router.post("/submissions/{submission_id}/grade", response_model=SubmissionOut)
+def grade_submission(
+    submission_id: int,
+    payload: GradeIn,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    submission = db.get(AssignmentSubmission, submission_id)
+    if submission is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "submission not found")
+    _owned_or_404(db, db.get(Assignment, submission.assignment_id), user)
+    submission.score = payload.score
+    submission.feedback = payload.feedback
+    submission.graded_by = user.id
+    submission.graded_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(submission)
+    return submission
+
+
+# Unambiguous codes: no 0/O/1/I.
+_ATTENDANCE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+@router.post("/lectures/{lecture_id}/attendance", response_model=AttendanceSessionOut)
+def open_attendance(
+    lecture_id: int,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    lecture = _owned_or_404(db, db.get(Lecture, lecture_id), user)
+    code = "".join(secrets.choice(_ATTENDANCE_ALPHABET) for _ in range(6))
+    session = AttendanceSession(
+        lecture_id=lecture.id,
+        code=code,
+        created_by=user.id,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+@router.get("/attendance/{session_id}", response_model=AttendanceRosterOut)
+def attendance_roster(
+    session_id: int,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    session = db.get(AttendanceSession, session_id)
+    if session is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "session not found")
+    lecture = _owned_or_404(db, db.get(Lecture, session.lecture_id), user)
+
+    present_ids = set(
+        db.scalars(
+            select(AttendanceRecord.student_id).where(AttendanceRecord.session_id == session.id)
+        )
+    )
+    enrolled = db.scalars(
+        select(User)
+        .join(Enrollment, Enrollment.student_id == User.id)
+        .where(Enrollment.course_id == lecture.course_id)
+        .order_by(User.full_name)
+    ).all()
+
+    return AttendanceRosterOut(
+        id=session.id,
+        lecture_id=session.lecture_id,
+        code=session.code,
+        expires_at=session.expires_at,
+        students=[
+            RosterStudent(
+                id=s.id, full_name=s.full_name, email=s.email, present=s.id in present_ids
+            )
+            for s in enrolled
+        ],
+    )

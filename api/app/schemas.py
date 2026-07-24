@@ -197,6 +197,7 @@ class AssignmentOut(BaseModel):
     title: str
     description: str
     due_at: datetime
+    max_score: int
 
     class Config:
         from_attributes = True
@@ -243,3 +244,70 @@ class AssignmentUpdate(BaseModel):
 class ExamUpdate(BaseModel):
     title: str | None = None
     starts_at: datetime | None = None
+
+
+class SubmissionIn(BaseModel):
+    body: str
+
+
+class SubmissionOut(BaseModel):
+    id: int
+    assignment_id: int
+    student_id: int
+    student: UserOut
+    body: str
+    submitted_at: datetime
+    score: int | None
+    feedback: str
+    graded_at: datetime | None
+
+    class Config:
+        from_attributes = True
+
+
+class GradeIn(BaseModel):
+    score: int
+    feedback: str = ""
+
+
+class StudentAssignmentOut(BaseModel):
+    id: int
+    course_id: int
+    title: str
+    description: str
+    due_at: datetime
+    max_score: int
+    submission: SubmissionOut | None = None
+
+
+class AttendanceSessionOut(BaseModel):
+    id: int
+    lecture_id: int
+    code: str
+    expires_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AttendanceMarkIn(BaseModel):
+    code: str
+
+
+class AttendanceMarkOut(BaseModel):
+    lecture_title: str
+
+
+class RosterStudent(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    present: bool
+
+
+class AttendanceRosterOut(BaseModel):
+    id: int
+    lecture_id: int
+    code: str
+    expires_at: datetime
+    students: list[RosterStudent]

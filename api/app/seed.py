@@ -11,6 +11,7 @@ from sqlalchemy import select
 from .db import SessionLocal
 from .models import (
     Assignment,
+    AssignmentSubmission,
     Course,
     Enrollment,
     Exam,
@@ -116,12 +117,19 @@ def seed():
                 uploaded_by=instructor.id,
             )
         )
+        ps3 = Assignment(
+            course_id=course.id,
+            title="Problem Set 3: Link analysis",
+            description="Compute PageRank on the provided graph and write up your findings.",
+            due_at=at(5, 23, 59),
+        )
+        db.add(ps3)
+        db.flush()
         db.add(
-            Assignment(
-                course_id=course.id,
-                title="Problem Set 3: Link analysis",
-                description="Compute PageRank on the provided graph and write up your findings.",
-                due_at=at(5, 23, 59),
+            AssignmentSubmission(
+                assignment_id=ps3.id,
+                student_id=student.id,
+                body="My writeup: I implemented power iteration; it converged after 18 steps with damping 0.85.",
             )
         )
         db.add(

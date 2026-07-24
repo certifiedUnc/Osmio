@@ -145,6 +145,10 @@ export function getLecture(id: number): Promise<LectureDetail> {
   return request<LectureDetail>(`/lectures/${id}`, { next: { revalidate: 60 } });
 }
 
+export function transcriptUrl(lectureId: number, format: "txt" | "pdf"): string {
+  return `${API_BASE}/lectures/${lectureId}/transcript.${format}`;
+}
+
 export function getQuestions(lectureId: number): Promise<Question[]> {
   return request<Question[]>(`/lectures/${lectureId}/questions`, { cache: "no-store" });
 }
@@ -241,6 +245,7 @@ export interface Assignment {
   title: string;
   description: string;
   due_at: string;
+  max_score: number;
 }
 
 export interface Exam {
@@ -249,6 +254,28 @@ export interface Exam {
   title: string;
   starts_at: string;
   duration_min: number;
+}
+
+export interface Submission {
+  id: number;
+  assignment_id: number;
+  student_id: number;
+  student: User;
+  body: string;
+  submitted_at: string;
+  score: number | null;
+  feedback: string;
+  graded_at: string | null;
+}
+
+export interface StudentAssignment {
+  id: number;
+  course_id: number;
+  title: string;
+  description: string;
+  due_at: string;
+  max_score: number;
+  submission: Submission | null;
 }
 
 export function createAssignment(
@@ -303,6 +330,76 @@ export function updateExam(
 
 export function deleteExam(examId: number, token: string): Promise<void> {
   return request(`/instructor/exams/${examId}`, authed(token, { method: "DELETE" }));
+}
+
+// --- Assignment submissions + grading ---
+export function getMyAssignments(token: string): Promise<StudentAssignment[]> {
+  return request("/me/assignments", authed(token));
+}
+
+export function getCourseAssignments(courseId: number, token: string): Promise<Assignment[]> {
+  return request(`/courses/${courseId}/assignments`, authed(token));
+}
+
+export function submitAssignment(
+  assignmentId: number,
+  body: string,
+  token: string,
+): Promise<Submission> {
+  return request(
+    `/assignments/${assignmentId}/submissions`,
+    authed(token, { method: "POST", body: JSON.stringify({ body }) }),
+  );
+}
+
+export function getSubmissions(assignmentId: number, token: string): Promise<Submission[]> {
+  return request(`/instructor/assignments/${assignmentId}/submissions`, authed(token));
+}
+
+export function gradeSubmission(
+  submissionId: number,
+  payload: { score: number; feedback: string },
+  token: string,
+): Promise<Submission> {
+  return request(
+    `/instructor/submissions/${submissionId}/grade`,
+    authed(token, { method: "POST", body: JSON.stringify(payload) }),
+  );
+}
+
+// --- Attendance (QR / code) ---
+export interface AttendanceSession {
+  id: number;
+  lecture_id: number;
+  code: string;
+  expires_at: string;
+}
+
+export interface RosterStudent {
+  id: number;
+  full_name: string;
+  email: string;
+  present: boolean;
+}
+
+export interface AttendanceRoster {
+  id: number;
+  lecture_id: number;
+  code: string;
+  expires_at: string;
+  students: RosterStudent[];
+}
+
+export function openAttendance(lectureId: number, token: string): Promise<AttendanceSession> {
+  return request(`/instructor/lectures/${lectureId}/attendance`, authed(token, { method: "POST" }));
+}
+
+export function getAttendanceRoster(sessionId: number, token: string): Promise<AttendanceRoster> {
+  return request(`/instructor/attendance/${sessionId}`, authed(token));
+}
+
+export function markAttendance(code: string, token: string): Promise<{ lecture_title: string }> {
+  return request("/attendance/mark", authed(token, { method: "POST", body: JSON.stringify({ code }) }));
 }
 
 // --- Admin ---

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { ApiError, getLecture, getQuestions } from "@/lib/api";
+import { ApiError, getLecture, getQuestions, transcriptUrl } from "@/lib/api";
 import LecturePlayer from "@/components/LecturePlayer";
 
 // Next 16: params is async.
@@ -31,7 +31,20 @@ export default async function LecturePage({ params }: { params: Promise<{ id: st
         &larr; All lectures
       </Link>
       <h1 className="mt-2 text-xl font-semibold text-neutral-900">{lecture.title}</h1>
-      <p className="mb-4 text-sm text-neutral-500">Week {lecture.week}</p>
+      <div className="mb-4 flex items-center gap-3 text-sm text-neutral-500">
+        <span>Week {lecture.week}</span>
+        {lecture.segments.length > 0 && (
+          <span>
+            Transcript:{" "}
+            <a href={transcriptUrl(lecture.id, "txt")} className="text-sky-700 hover:underline">
+              .txt
+            </a>{" "}
+            <a href={transcriptUrl(lecture.id, "pdf")} className="text-sky-700 hover:underline">
+              .pdf
+            </a>
+          </span>
+        )}
+      </div>
       <LecturePlayer lecture={lecture} initialQuestions={questions} />
     </main>
   );

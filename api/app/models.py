@@ -138,6 +138,7 @@ class Assignment(Base):
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text, default="")
     due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    max_score: Mapped[int] = mapped_column(Integer, default=100)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -152,6 +153,23 @@ class Exam(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class AssignmentSubmission(Base):
+    __tablename__ = "assignment_submissions"
+    __table_args__ = (UniqueConstraint("assignment_id", "student_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    assignment_id: Mapped[int] = mapped_column(ForeignKey("assignments.id"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    body: Mapped[str] = mapped_column(Text, default="")
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    feedback: Mapped[str] = mapped_column(Text, default="")
+    graded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    graded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    student: Mapped["User"] = relationship(foreign_keys=[student_id])
+
+
 class Announcement(Base):
     __tablename__ = "announcements"
 
@@ -163,6 +181,32 @@ class Announcement(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     course: Mapped["Course"] = relationship(back_populates="announcements")
+
+
+class AttendanceSession(Base):
+    __tablename__ = "attendance_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    lecture_id: Mapped[int] = mapped_column(ForeignKey("lectures.id"), index=True)
+    code: Mapped[str] = mapped_column(String(12), index=True)
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    lecture: Mapped["Lecture"] = relationship()
+    records: Mapped[list["AttendanceRecord"]] = relationship(back_populates="session")
+
+
+class AttendanceRecord(Base):
+    __tablename__ = "attendance_records"
+    __table_args__ = (UniqueConstraint("session_id", "student_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("attendance_sessions.id"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    marked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    session: Mapped["AttendanceSession"] = relationship(back_populates="records")
 
 
 class Partner(Base):

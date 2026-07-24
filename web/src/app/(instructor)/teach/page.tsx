@@ -1,16 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   createAssignment,
   createExam,
   createLecture,
+  getCourseAssignments,
   getLecture,
   getMyCourses,
+  openAttendance,
   postAnnouncement,
   processLecture,
+  type Assignment,
   type Course,
   type LectureSummary,
 } from "@/lib/api";
@@ -89,6 +93,28 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
   const [examTitle, setExamTitle] = useState("");
   const [examStart, setExamStart] = useState("");
   const [assessMsg, setAssessMsg] = useState<string | null>(null);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+
+  const loadAssignments = useCallback(() => {
+    getCourseAssignments(course.id, token)
+      .then(setAssignments)
+      .catch(() => {});
+  }, [course.id, token]);
+
+  useEffect(() => {
+    loadAssignments();
+  }, [loadAssignments]);
+
+  const router = useRouter();
+  async function takeAttendance(lectureId: number) {
+    setOpError(null);
+    try {
+      const session = await openAttendance(lectureId, token);
+      router.push(`/teach/attendance/${session.id}`);
+    } catch {
+      setOpError("Could not start attendance.");
+    }
+  }
 
   const mounted = useRef(true);
   useEffect(
@@ -190,6 +216,7 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
       setAsgTitle("");
       setAsgDue("");
       setAssessMsg("Assignment deadline added.");
+      loadAssignments();
     } catch {
       setAssessMsg("Could not add assignment.");
     }
@@ -244,6 +271,13 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
                       Process
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => takeAttendance(l.id)}
+                    className="rounded border border-neutral-300 px-2 py-0.5 text-xs hover:bg-neutral-50"
+                  >
+                    Attendance
+                  </button>
                 </span>
               </li>
             ))}
@@ -341,7 +375,22 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
           <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
             Assignments and exams
           </h3>
-          <form onSubmit={submitAssignment} className="mt-2 flex flex-wrap items-center gap-2">
+          {assignments.length > 0 && (
+            <ul className="mt-2 divide-y divide-neutral-100">
+              {assignments.map((a) => (
+                <li key={a.id} className="flex items-center justify-between py-1.5 text-sm">
+                  <span className="text-neutral-800">{a.title}</span>
+                  <Link
+                    href={`/teach/assignments/${a.id}`}
+                    className="text-xs text-sky-700 hover:underline"
+                  >
+                    Grade
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form onSubmit={submitAssignment} className="mt-3 flex flex-wrap items-center gap-2">
             <input
               value={asgTitle}
               onChange={(e) => setAsgTitle(e.target.value)}
