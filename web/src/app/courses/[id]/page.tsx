@@ -375,15 +375,22 @@ function CourseView({ courseId }: { courseId: number }) {
                   }
                   const pill = PILL[status];
                   const scoreText = sub && sub.score != null ? ` · ${Math.round((sub.score / a.max_score) * 100)}%` : "";
-                  return (
-                    <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 16, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "16px 20px" }}>
+                  const rowStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 16, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "16px 20px", textDecoration: "none" };
+                  const inner = (
+                    <>
                       <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", color: pill.color, background: pill.bg, padding: "5px 10px", borderRadius: 7, minWidth: 86, textAlign: "center" }}>{label}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)" }}>{a.title}</div>
                         <div style={{ fontSize: 12.5, color: "var(--faint)", marginTop: 3 }}>Homework · {a.max_score} points{scoreText}</div>
                       </div>
                       <span style={{ fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>{dueLabel(a.due_at)}</span>
-                    </div>
+                    </>
+                  );
+                  // Students get the submission page; instructors/admins have no student-facing detail view.
+                  return user.role === "student" ? (
+                    <Link key={a.id} href={`/assignments/${a.id}`} style={rowStyle}>{inner}</Link>
+                  ) : (
+                    <div key={a.id} style={rowStyle}>{inner}</div>
                   );
                 })}
               </div>
