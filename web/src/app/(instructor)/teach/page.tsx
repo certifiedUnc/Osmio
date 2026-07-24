@@ -242,10 +242,13 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
 
   return (
     <section className="rounded-lg border border-neutral-200">
-      <header className="border-b border-neutral-200 px-4 py-3">
+      <header className="flex items-center justify-between gap-3 border-b border-neutral-200 px-4 py-3">
         <h2 className="font-semibold text-neutral-900">
           {course.code}: {course.title}
         </h2>
+        <Link href={`/teach/courses/${course.id}`} className="text-sm font-medium text-indigo-600 hover:underline">
+          Open course page
+        </Link>
       </header>
       <div className="space-y-5 p-4">
         <div>

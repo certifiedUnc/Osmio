@@ -40,6 +40,7 @@ from ..schemas import (
     LectureUpdate,
     RosterStudent,
     SubmissionOut,
+    UserOut,
 )
 
 router = APIRouter(prefix="/instructor", tags=["instructor"])
@@ -63,6 +64,21 @@ def my_courses(
     if user.role != Role.admin:
         stmt = stmt.where(Course.instructor_id == user.id)
     return db.scalars(stmt).all()
+
+
+@router.get("/courses/{course_id}/students", response_model=list[UserOut])
+def course_students(
+    course_id: int,
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    _course_owned(db, course_id, user)
+    return db.scalars(
+        select(User)
+        .join(Enrollment, Enrollment.student_id == User.id)
+        .where(Enrollment.course_id == course_id)
+        .order_by(User.full_name)
+    ).all()
 
 
 @router.post("/lectures", response_model=LectureSummary)
