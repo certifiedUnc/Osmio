@@ -209,9 +209,9 @@ export default function LearnPage() {
                   <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
                     <span style={{ flexShrink: 0, width: 12, height: 12, borderRadius: 4, background: color, marginTop: 5 }} />
                     <div>
-                      <div className={grotesk.className} style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-.3px", color: "var(--text)" }}>
+                      <Link href={`/courses/${course.id}`} className={grotesk.className} style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-.3px", color: "var(--text)", textDecoration: "none" }}>
                         {course.code}: {course.title}
-                      </div>
+                      </Link>
                       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 5 }}>
                         {course.term && <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", background: "var(--surface2)", padding: "3px 9px", borderRadius: 6 }}>{course.term}</span>}
                       </div>
