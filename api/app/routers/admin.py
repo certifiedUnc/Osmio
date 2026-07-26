@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -10,6 +10,7 @@ from ..models import (
     Partner,
     PartnerApiKey,
     PartnerCourseLicense,
+    PartnerRequest,
     Role,
     User,
 )
@@ -26,6 +27,8 @@ from ..schemas import (
     LicenseOut,
     PartnerIn,
     PartnerOut,
+    PartnerUsageItem,
+    PartnerUsageOut,
     RoleUpdate,
     UserOut,
 )
@@ -210,3 +213,27 @@ def grant_license(partner_id: int, payload: LicenseIn, db: Session = Depends(get
     db.commit()
     db.refresh(lic)
     return lic
+
+
+@router.get("/partners/{partner_id}/usage", response_model=PartnerUsageOut)
+def partner_usage(partner_id: int, db: Session = Depends(get_db)):
+    partner = db.get(Partner, partner_id)
+    if partner is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "partner not found")
+    total = (
+        db.scalar(
+            select(func.count(PartnerRequest.id)).where(PartnerRequest.partner_id == partner_id)
+        )
+        or 0
+    )
+    recent = db.scalars(
+        select(PartnerRequest)
+        .where(PartnerRequest.partner_id == partner_id)
+        .order_by(PartnerRequest.id.desc())
+        .limit(25)
+    ).all()
+    return PartnerUsageOut(
+        partner=partner.name,
+        total=total,
+        recent=[PartnerUsageItem.model_validate(r) for r in recent],
+    )

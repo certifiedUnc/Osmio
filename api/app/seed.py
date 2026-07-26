@@ -17,13 +17,20 @@ from .models import (
     Enrollment,
     Exam,
     Lecture,
+    Partner,
+    PartnerApiKey,
+    PartnerCourseLicense,
     ProcessingStatus,
     Role,
     Subject,
     TranscriptSegment,
     User,
 )
-from .security import hash_password
+from .security import hash_api_key, hash_password
+
+# A fixed key so the partner demo works on a fresh database. In production keys are random
+# and shown once; this one is only for the local funding demo.
+DEMO_PARTNER_KEY = "osk_demo_partner_2026"
 
 DEMO_TRANSCRIPT = [
     (0, 6000, "Alright, let's get started. Today we're looking at how search engines rank pages."),
@@ -172,6 +179,22 @@ def seed():
                 Assignment(course_id=hist.id, title="Reading response 4", due_at=at(7, 23, 59)),
             ]
         )
+
+        # A demo licensing partner: an external app that pulls CS305 through the content API.
+        partner = Partner(name="Northwind Learning")
+        db.add(partner)
+        db.flush()
+        db.add(
+            PartnerApiKey(
+                partner_id=partner.id,
+                label="Demo sandbox key",
+                key_prefix=DEMO_PARTNER_KEY[:12],
+                key_hash=hash_api_key(DEMO_PARTNER_KEY),
+            )
+        )
+        # Licensed for CS305 only, so the per-course scoping is visible in the demo.
+        db.add(PartnerCourseLicense(partner_id=partner.id, course_id=course.id))
+
         db.commit()
     finally:
         db.close()

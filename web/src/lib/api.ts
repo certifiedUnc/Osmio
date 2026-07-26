@@ -488,3 +488,58 @@ export function formatTimestamp(ms: number): string {
   const ss = String(s).padStart(2, "0");
   return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
 }
+
+// --- Partner content API (external, API-key auth via X-API-Key) ---
+export interface PartnerLecture {
+  id: number;
+  title: string;
+  week: number;
+  duration_s: number;
+}
+
+export interface PartnerCourse {
+  id: number;
+  code: string;
+  title: string;
+  term: string;
+  lectures: PartnerLecture[];
+}
+
+export interface PartnerTranscript {
+  lecture_id: number;
+  title: string;
+  segments: Segment[];
+}
+
+export interface PartnerUsageItem {
+  method: string;
+  path: string;
+  status_code: number;
+  created_at: string;
+}
+
+export interface PartnerUsage {
+  partner: string;
+  total: number;
+  recent: PartnerUsageItem[];
+}
+
+function partnerRequest<T>(path: string, key: string): Promise<T> {
+  return request<T>(`/partner/v1${path}`, { headers: { "X-API-Key": key }, cache: "no-store" });
+}
+
+export function partnerGetCourses(key: string): Promise<PartnerCourse[]> {
+  return partnerRequest("/courses", key);
+}
+
+export function partnerGetTranscript(lectureId: number, key: string): Promise<PartnerTranscript> {
+  return partnerRequest(`/lectures/${lectureId}/transcript`, key);
+}
+
+export function partnerGetUsage(key: string): Promise<PartnerUsage> {
+  return partnerRequest("/usage", key);
+}
+
+export function adminPartnerUsage(partnerId: number, token: string): Promise<PartnerUsage> {
+  return request(`/admin/partners/${partnerId}/usage`, authed(token));
+}
