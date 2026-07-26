@@ -16,6 +16,7 @@ import {
   adminListLicenses,
   adminListPartners,
   adminListUsers,
+  adminPartnerUsage,
   adminRevokeKey,
   adminSetRole,
   adminUnenroll,
@@ -25,6 +26,7 @@ import {
   type Enrollment,
   type License,
   type Partner,
+  type PartnerUsage,
   type Role,
   type User,
 } from "@/lib/api";
@@ -371,14 +373,20 @@ function PartnersSection({ token, courses }: { token: string; courses: Course[] 
 function PartnerRow({ partner, token, courses }: { partner: Partner; token: string; courses: Course[] }) {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [licenses, setLicenses] = useState<License[]>([]);
+  const [usage, setUsage] = useState<PartnerUsage | null>(null);
   const [freshKey, setFreshKey] = useState<ApiKeyCreated | null>(null);
   const [courseId, setCourseId] = useState<number | "">("");
   const [error, setError] = useState<string | null>(null);
 
+  const refreshUsage = useCallback(() => {
+    adminPartnerUsage(partner.id, token).then(setUsage).catch(() => {});
+  }, [partner.id, token]);
+
   const load = useCallback(() => {
     adminListKeys(partner.id, token).then(setKeys).catch(() => {});
     adminListLicenses(partner.id, token).then(setLicenses).catch(() => {});
-  }, [partner.id, token]);
+    refreshUsage();
+  }, [partner.id, token, refreshUsage]);
 
   useEffect(() => {
     load();
@@ -475,6 +483,32 @@ function PartnerRow({ partner, token, courses }: { partner: Partner; token: stri
             Grant
           </button>
         </div>
+      </div>
+
+      <div className="mt-3 text-sm">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">API usage</p>
+          <button type="button" onClick={refreshUsage} className="text-xs text-neutral-500 hover:underline">
+            Refresh
+          </button>
+        </div>
+        <p className="mt-1 text-neutral-800">
+          <span className="font-semibold">{usage?.total ?? 0}</span> metered calls
+        </p>
+        {usage && usage.recent.length > 0 && (
+          <ul className="mt-1 space-y-0.5">
+            {usage.recent.slice(0, 6).map((r, i) => (
+              <li key={i} className="flex items-center justify-between gap-3 font-mono text-xs text-neutral-500">
+                <span className="truncate">
+                  {r.method} {r.path.replace("/partner/v1", "")}
+                </span>
+                <span className="shrink-0 text-neutral-400">
+                  {new Date(r.created_at).toLocaleTimeString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
     </div>
