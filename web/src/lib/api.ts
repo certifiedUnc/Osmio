@@ -533,3 +533,57 @@ export function getThread(threadId: number, token: string): Promise<DiscussionTh
 export function postReply(threadId: number, body: string, token: string): Promise<DiscussionThreadDetail> {
   return request(`/threads/${threadId}/replies`, authed(token, { method: "POST", body: JSON.stringify({ body }) }));
 }
+
+// --- Quizzes ---
+export interface QuizSummary {
+  id: number;
+  title: string;
+  question_count: number;
+  total: number;
+  best_score: number | null;
+}
+
+export interface QuizQuestionOut {
+  id: number;
+  prompt: string;
+  options: string[];
+}
+
+export interface QuizDetail {
+  id: number;
+  title: string;
+  questions: QuizQuestionOut[];
+}
+
+export interface QuestionResult {
+  question_id: number;
+  correct_index: number;
+  chosen: number;
+  is_correct: boolean;
+}
+
+export interface AttemptResult {
+  score: number;
+  total: number;
+  results: QuestionResult[];
+}
+
+export function getQuizzes(courseId: number, token: string): Promise<QuizSummary[]> {
+  return request(`/courses/${courseId}/quizzes`, authed(token));
+}
+
+export function getQuiz(quizId: number, token: string): Promise<QuizDetail> {
+  return request(`/quizzes/${quizId}`, authed(token));
+}
+
+export function submitQuizAttempt(quizId: number, answers: number[], token: string): Promise<AttemptResult> {
+  return request(`/quizzes/${quizId}/attempts`, authed(token, { method: "POST", body: JSON.stringify({ answers }) }));
+}
+
+export function createQuiz(
+  courseId: number,
+  payload: { title: string; questions: { prompt: string; options: string[]; correct_index: number }[] },
+  token: string,
+): Promise<QuizSummary> {
+  return request(`/instructor/courses/${courseId}/quizzes`, authed(token, { method: "POST", body: JSON.stringify(payload) }));
+}

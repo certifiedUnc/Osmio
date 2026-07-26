@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .db import Base, engine
-from .routers import admin, auth, discussions, instructor, lectures, me
+from .routers import admin, auth, discussions, instructor, lectures, me, quizzes
 from .seed import seed
 
 
@@ -32,6 +32,7 @@ app.include_router(instructor.router)
 app.include_router(me.router)
 app.include_router(lectures.router)
 app.include_router(discussions.router)
+app.include_router(quizzes.router)
 
 
 @app.get("/health")

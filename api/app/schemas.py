@@ -347,3 +347,52 @@ class ThreadDetail(BaseModel):
     author: str
     created_at: datetime
     replies: list[ReplyOut]
+
+
+# --- Quizzes ---
+class QuizQuestionIn(BaseModel):
+    prompt: str
+    options: list[str]
+    correct_index: int
+
+
+class QuizIn(BaseModel):
+    title: str
+    questions: list[QuizQuestionIn]
+
+
+class QuizQuestionOut(BaseModel):
+    id: int
+    prompt: str
+    options: list[str]
+
+
+class QuizDetail(BaseModel):
+    id: int
+    title: str
+    questions: list[QuizQuestionOut]
+
+
+class QuizSummary(BaseModel):
+    id: int
+    title: str
+    question_count: int
+    total: int
+    best_score: int | None = None
+
+
+class AttemptIn(BaseModel):
+    answers: list[int]
+
+
+class QuestionResult(BaseModel):
+    question_id: int
+    correct_index: int
+    chosen: int
+    is_correct: bool
+
+
+class AttemptResult(BaseModel):
+    score: int
+    total: int
+    results: list[QuestionResult]

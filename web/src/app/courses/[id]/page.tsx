@@ -6,21 +6,29 @@ import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useState } from "react";
 
 import {
+  createQuiz,
   createThread,
   getAnnouncements,
   getCalendar,
   getCourseAssignments,
   getMyAssignments,
   getMyCourses,
+  getQuiz,
+  getQuizzes,
   getThread,
   getThreads,
   postReply,
+  submitQuizAttempt,
   type Announcement,
+  type AttemptResult,
   type CalendarEvent,
   type Course,
   type DiscussionThread,
   type DiscussionThreadDetail,
   type LectureSummary,
+  type QuizDetail,
+  type QuizSummary,
+  type Role,
   type StudentAssignment,
 } from "@/lib/api";
 import { homePath, RequireRole, useAuth } from "@/lib/auth";
@@ -45,7 +53,7 @@ const THEMES = {
   },
 } as const;
 
-type Tab = "content" | "announcements" | "assignments" | "discussion";
+type Tab = "content" | "announcements" | "assignments" | "discussion" | "quizzes";
 const PILL = {
   due: { color: "#B45309", bg: "#FDF0DD" },
   overdue: { color: "#E11D48", bg: "#FCE4EA" },
@@ -204,6 +212,7 @@ function CourseView({ courseId }: { courseId: number }) {
     { k: "announcements", label: "Announcements" },
     { k: "assignments", label: "Assignments" },
     { k: "discussion", label: "Discussion" },
+    { k: "quizzes", label: "Quizzes" },
   ];
   const stats = [
     { value: String(sections.length), label: sections.length === 1 ? "section" : "sections" },
@@ -404,6 +413,7 @@ function CourseView({ courseId }: { courseId: number }) {
             )}
 
             {tab === "discussion" && <Discussion courseId={course.id} token={token} />}
+            {tab === "quizzes" && <Quizzes courseId={course.id} token={token} role={user.role} />}
           </section>
 
           {/* sidebar */}
@@ -553,6 +563,176 @@ function Discussion({ courseId, token }: { courseId: number; token: string }) {
           <span style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: "var(--muted)" }}>{t.reply_count} {t.reply_count === 1 ? "reply" : "replies"}</span>
         </button>
       ))}
+    </div>
+  );
+}
+
+function Quizzes({ courseId, token, role }: { courseId: number; token: string; role: Role }) {
+  const [quizzes, setQuizzes] = useState<QuizSummary[] | null>(null);
+  const [taking, setTaking] = useState<QuizDetail | null>(null);
+  const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [result, setResult] = useState<AttemptResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [building, setBuilding] = useState(false);
+
+  const load = () => getQuizzes(courseId, token).then(setQuizzes).catch(() => setQuizzes([]));
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId, token]);
+
+  async function open(quizId: number) {
+    setResult(null);
+    setAnswers({});
+    try {
+      setTaking(await getQuiz(quizId, token));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function submit() {
+    if (!taking || busy) return;
+    const ans = taking.questions.map((q) => answers[q.id] ?? -1);
+    if (ans.some((a) => a < 0)) return;
+    setBusy(true);
+    try {
+      setResult(await submitQuizAttempt(taking.id, ans, token));
+      load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const card: React.CSSProperties = { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: "18px 20px" };
+
+  if (taking) {
+    const byId = result ? Object.fromEntries(result.results.map((r) => [r.question_id, r])) : null;
+    const allAnswered = taking.questions.every((q) => answers[q.id] != null);
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <button type="button" onClick={() => { setTaking(null); setResult(null); }} style={{ alignSelf: "flex-start", border: "none", background: "transparent", cursor: "pointer", color: TEAL, fontWeight: 600, fontSize: 13, padding: 0 }}>&larr; All quizzes</button>
+        <div style={{ ...card, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <span className={grotesk.className} style={{ fontSize: 18, fontWeight: 600, color: "var(--text)" }}>{taking.title}</span>
+          {result && <span style={{ fontSize: 13, fontWeight: 700, color: "var(--teal-text)", background: "var(--teal-soft)", padding: "5px 12px", borderRadius: 999 }}>{result.score} / {result.total}</span>}
+        </div>
+        {taking.questions.map((q, qi) => (
+          <div key={q.id} style={card}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)", marginBottom: 10 }}>{qi + 1}. {q.prompt}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {q.options.map((opt, oi) => {
+                const res = byId?.[q.id];
+                const isCorrect = res != null && res.correct_index === oi;
+                const isWrongPick = res != null && res.chosen === oi && !res.is_correct;
+                const border = isCorrect ? "1px solid #0FB5A6" : isWrongPick ? "1px solid #E11D48" : "1px solid var(--border)";
+                const bg = isCorrect ? "var(--teal-soft)" : isWrongPick ? "#FCE4EA" : "var(--surface)";
+                return (
+                  <label key={oi} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 13px", border, borderRadius: 10, background: bg, cursor: result ? "default" : "pointer" }}>
+                    <input type="radio" name={`q${q.id}`} checked={(answers[q.id] ?? res?.chosen) === oi} disabled={!!result} onChange={() => setAnswers((a) => ({ ...a, [q.id]: oi }))} />
+                    <span style={{ fontSize: 14.5, color: "var(--text)" }}>{opt}</span>
+                    {isCorrect && <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, color: "var(--teal-text)" }}>Correct</span>}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        {!result ? (
+          <button type="button" onClick={submit} disabled={busy || !allAnswered} style={{ alignSelf: "flex-start", padding: "11px 22px", border: "none", borderRadius: 10, background: TEAL, color: "#fff", fontSize: 14, fontWeight: 600, cursor: allAnswered ? "pointer" : "default", opacity: allAnswered && !busy ? 1 : 0.5 }}>{busy ? "Submitting" : "Submit answers"}</button>
+        ) : (
+          <div style={{ fontSize: 14, color: "var(--muted)" }}>You scored <strong style={{ color: "var(--text)" }}>{result.score} out of {result.total}</strong>. Correct answers are highlighted above.</div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {role !== "student" && (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button type="button" onClick={() => setBuilding((v) => !v)} style={{ padding: "9px 16px", border: "none", borderRadius: 9, background: TEAL, color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>{building ? "Cancel" : "New quiz"}</button>
+        </div>
+      )}
+      {building && <QuizBuilder courseId={courseId} token={token} onDone={() => { setBuilding(false); load(); }} />}
+      {!quizzes && <p style={{ fontSize: 14, color: "var(--faint)" }}>Loading</p>}
+      {quizzes && quizzes.length === 0 && !building && <p style={{ fontSize: 14, color: "var(--faint)" }}>No quizzes yet.</p>}
+      {quizzes?.map((q) => (
+        <div key={q.id} style={{ ...card, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <div style={{ minWidth: 0 }}>
+            <div className={grotesk.className} style={{ fontSize: 16, fontWeight: 600, color: "var(--text)" }}>{q.title}</div>
+            <div style={{ fontSize: 12.5, color: "var(--faint)" }}>{q.question_count} question{q.question_count === 1 ? "" : "s"}{q.best_score != null ? ` · best ${q.best_score}/${q.total}` : ""}</div>
+          </div>
+          <button type="button" onClick={() => open(q.id)} style={{ flexShrink: 0, padding: "9px 18px", border: "none", borderRadius: 9, background: TEAL, color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>{q.best_score != null ? "Retake" : "Take quiz"}</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+interface BuildQuestion {
+  prompt: string;
+  options: string[];
+  correct: number;
+}
+
+function QuizBuilder({ courseId, token, onDone }: { courseId: number; token: string; onDone: () => void }) {
+  const [title, setTitle] = useState("");
+  const [questions, setQuestions] = useState<BuildQuestion[]>([{ prompt: "", options: ["", "", "", ""], correct: 0 }]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function patch(qi: number, next: Partial<BuildQuestion>) {
+    setQuestions((qs) => qs.map((q, i) => (i === qi ? { ...q, ...next } : q)));
+  }
+  function setOption(qi: number, oi: number, val: string) {
+    setQuestions((qs) => qs.map((q, i) => (i === qi ? { ...q, options: q.options.map((o, j) => (j === oi ? val : o)) } : q)));
+  }
+
+  async function save() {
+    setError(null);
+    const built = questions.map((q) => {
+      // Drop empty options and remap the correct index to the filtered list.
+      const kept = q.options.map((o, idx) => ({ o: o.trim(), idx })).filter((x) => x.o);
+      return { prompt: q.prompt.trim(), options: kept.map((x) => x.o), correct_index: kept.findIndex((x) => x.idx === q.correct) };
+    });
+    if (!title.trim() || built.some((q) => !q.prompt || q.options.length < 2 || q.correct_index < 0)) {
+      setError("Each question needs a prompt, at least two options, and a marked correct answer.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await createQuiz(courseId, { title: title.trim(), questions: built }, token);
+      onDone();
+    } catch {
+      setError("Could not create the quiz.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const card: React.CSSProperties = { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: "18px 20px" };
+  const input: React.CSSProperties = { width: "100%", padding: "9px 12px", border: "1px solid var(--border)", borderRadius: 9, background: "var(--surface)", color: "var(--text)", fontFamily: "inherit", fontSize: 14, outline: "none" };
+
+  return (
+    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 14 }}>
+      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Quiz title" style={input} />
+      {questions.map((q, qi) => (
+        <div key={qi} style={{ borderTop: "1px solid var(--border-soft)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+          <input value={q.prompt} onChange={(e) => patch(qi, { prompt: e.target.value })} placeholder={`Question ${qi + 1}`} style={input} />
+          <div style={{ fontSize: 12, color: "var(--faint)" }}>Select the correct answer.</div>
+          {q.options.map((opt, oi) => (
+            <label key={oi} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <input type="radio" name={`build-${qi}`} checked={q.correct === oi} onChange={() => patch(qi, { correct: oi })} />
+              <input value={opt} onChange={(e) => setOption(qi, oi, e.target.value)} placeholder={`Option ${oi + 1}`} style={input} />
+            </label>
+          ))}
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <button type="button" onClick={() => setQuestions((qs) => [...qs, { prompt: "", options: ["", "", "", ""], correct: 0 }])} style={{ padding: "8px 14px", border: "1px solid var(--border)", borderRadius: 9, background: "var(--surface)", color: "var(--text)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add question</button>
+        <button type="button" onClick={save} disabled={busy || !title.trim()} style={{ padding: "9px 18px", border: "none", borderRadius: 9, background: TEAL, color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: title.trim() ? "pointer" : "default", opacity: title.trim() ? 1 : 0.5 }}>{busy ? "Saving" : "Create quiz"}</button>
+        {error && <span style={{ fontSize: 12.5, color: "#dc2626" }}>{error}</span>}
+      </div>
     </div>
   );
 }
