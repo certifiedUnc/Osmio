@@ -16,6 +16,7 @@ import {
   getCourses,
   getLecture,
   getQuestions,
+  recordEvent,
   transcriptUrl,
   type Announcement,
   type Course,
@@ -86,8 +87,26 @@ export default function LecturePage({ params }: { params: Promise<{ id: string }
 
   const playerRef = useRef<PlayerHandle | null>(null);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
+  const currentMsRef = useRef(0);
   const seek = useCallback((ms: number) => playerRef.current?.seek(ms), []);
-  const onTimeUpdateMs = useCallback((ms: number) => setCurrentTimeMs(ms), []);
+  const onTimeUpdateMs = useCallback((ms: number) => {
+    currentMsRef.current = ms;
+    setCurrentTimeMs(ms);
+  }, []);
+
+  // Watch-time heartbeat: while a signed-in student is progressing through the lecture, report
+  // the elapsed seconds. Deltas are capped so seeking forward cannot inflate the count.
+  useEffect(() => {
+    if (!token || !lecture) return;
+    let last = currentMsRef.current;
+    const id = setInterval(() => {
+      const cur = currentMsRef.current;
+      const delta = cur - last;
+      last = cur;
+      if (delta > 500) recordEvent(lectureId, Math.min(Math.round(delta / 1000), 20), token).catch(() => {});
+    }, 15000);
+    return () => clearInterval(id);
+  }, [token, lecture, lectureId]);
 
   // Lecture + questions are public; anyone with the link can watch.
   useEffect(() => {

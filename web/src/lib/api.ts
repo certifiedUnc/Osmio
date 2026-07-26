@@ -543,3 +543,29 @@ export function partnerGetUsage(key: string): Promise<PartnerUsage> {
 export function adminPartnerUsage(partnerId: number, token: string): Promise<PartnerUsage> {
   return request(`/admin/partners/${partnerId}/usage`, authed(token));
 }
+
+// --- Analytics ---
+export function recordEvent(lectureId: number, seconds: number, token: string): Promise<void> {
+  return request(
+    "/me/events",
+    authed(token, { method: "POST", body: JSON.stringify({ lecture_id: lectureId, seconds }) }),
+  );
+}
+
+export interface TopLecture {
+  lecture_id: number;
+  title: string;
+  minutes: number;
+}
+
+export interface Analytics {
+  active_minutes_week: number;
+  active_students_week: number;
+  total_minutes: number;
+  partner_deliveries_week: number;
+  top_lectures: TopLecture[];
+}
+
+export function adminAnalytics(token: string): Promise<Analytics> {
+  return request("/admin/analytics", authed(token));
+}
