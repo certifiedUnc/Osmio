@@ -6,14 +6,20 @@ import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useState } from "react";
 
 import {
+  createThread,
   getAnnouncements,
   getCalendar,
   getCourseAssignments,
   getMyAssignments,
   getMyCourses,
+  getThread,
+  getThreads,
+  postReply,
   type Announcement,
   type CalendarEvent,
   type Course,
+  type DiscussionThread,
+  type DiscussionThreadDetail,
   type LectureSummary,
   type StudentAssignment,
 } from "@/lib/api";
@@ -39,7 +45,7 @@ const THEMES = {
   },
 } as const;
 
-type Tab = "content" | "announcements" | "assignments";
+type Tab = "content" | "announcements" | "assignments" | "discussion";
 const PILL = {
   due: { color: "#B45309", bg: "#FDF0DD" },
   overdue: { color: "#E11D48", bg: "#FCE4EA" },
@@ -197,6 +203,7 @@ function CourseView({ courseId }: { courseId: number }) {
     { k: "content", label: "Content" },
     { k: "announcements", label: "Announcements" },
     { k: "assignments", label: "Assignments" },
+    { k: "discussion", label: "Discussion" },
   ];
   const stats = [
     { value: String(sections.length), label: sections.length === 1 ? "section" : "sections" },
@@ -395,6 +402,8 @@ function CourseView({ courseId }: { courseId: number }) {
                 })}
               </div>
             )}
+
+            {tab === "discussion" && <Discussion courseId={course.id} token={token} />}
           </section>
 
           {/* sidebar */}
@@ -444,4 +453,106 @@ function CourseView({ courseId }: { courseId: number }) {
 function initials(name: string) {
   const parts = name.trim().split(/\s+/);
   return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
+}
+
+function Discussion({ courseId, token }: { courseId: number; token: string }) {
+  const [threads, setThreads] = useState<DiscussionThread[] | null>(null);
+  const [open, setOpen] = useState<DiscussionThreadDetail | null>(null);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [reply, setReply] = useState("");
+  const [composing, setComposing] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const loadThreads = () => getThreads(courseId, token).then(setThreads).catch(() => setThreads([]));
+  useEffect(() => {
+    loadThreads();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId, token]);
+
+  async function submitThread() {
+    if (!title.trim() || busy) return;
+    setBusy(true);
+    try {
+      const created = await createThread(courseId, { title: title.trim(), body: body.trim() }, token);
+      setTitle("");
+      setBody("");
+      setComposing(false);
+      setOpen(created);
+      loadThreads();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitReply() {
+    if (!open || !reply.trim() || busy) return;
+    setBusy(true);
+    try {
+      const updated = await postReply(open.id, reply.trim(), token);
+      setReply("");
+      setOpen(updated);
+      loadThreads();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const cardStyle: React.CSSProperties = { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: "18px 20px" };
+  const inputStyle: React.CSSProperties = { width: "100%", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, background: "var(--surface)", color: "var(--text)", fontFamily: "inherit", fontSize: 14, outline: "none" };
+
+  if (open) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <button type="button" onClick={() => setOpen(null)} style={{ alignSelf: "flex-start", border: "none", background: "transparent", cursor: "pointer", color: TEAL, fontWeight: 600, fontSize: 13, padding: 0 }}>&larr; All discussions</button>
+        <div style={cardStyle}>
+          <div className={grotesk.className} style={{ fontSize: 18, fontWeight: 600, color: "var(--text)" }}>{open.title}</div>
+          <div style={{ fontSize: 12.5, color: "var(--faint)", marginTop: 4 }}>{open.author} · {relTime(open.created_at)}</div>
+          {open.body && <p style={{ fontSize: 14.5, lineHeight: 1.6, color: "var(--text)", margin: "12px 0 0", whiteSpace: "pre-wrap" }}>{open.body}</p>}
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--faint)" }}>{open.replies.length} {open.replies.length === 1 ? "reply" : "replies"}</div>
+        {open.replies.map((r) => (
+          <div key={r.id} style={{ ...cardStyle, padding: "14px 18px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span className={grotesk.className} style={{ flexShrink: 0, width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg,#0FB5A6,#0d1a2b)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600 }}>{initials(r.author)}</span>
+              <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>{r.author}</span>
+              <span style={{ fontSize: 12, color: "var(--faint)" }}>{relTime(r.created_at)}</span>
+            </div>
+            <p style={{ fontSize: 14.5, lineHeight: 1.55, color: "var(--text)", margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{r.body}</p>
+          </div>
+        ))}
+        <div style={{ ...cardStyle, display: "flex", flexDirection: "column", gap: 10 }}>
+          <textarea value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Write a reply" rows={3} style={{ ...inputStyle, resize: "vertical" }} />
+          <button type="button" onClick={submitReply} disabled={busy || !reply.trim()} style={{ alignSelf: "flex-start", padding: "9px 18px", border: "none", borderRadius: 9, background: TEAL, color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: reply.trim() ? "pointer" : "default", opacity: reply.trim() ? 1 : 0.5 }}>Reply</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: 13, color: "var(--faint)" }}>Course discussion</span>
+        <button type="button" onClick={() => setComposing((v) => !v)} style={{ padding: "9px 16px", border: "none", borderRadius: 9, background: TEAL, color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>{composing ? "Cancel" : "New thread"}</button>
+      </div>
+      {composing && (
+        <div style={{ ...cardStyle, display: "flex", flexDirection: "column", gap: 10 }}>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Thread title" style={inputStyle} />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="What would you like to discuss?" rows={4} style={{ ...inputStyle, resize: "vertical" }} />
+          <button type="button" onClick={submitThread} disabled={busy || !title.trim()} style={{ alignSelf: "flex-start", padding: "9px 18px", border: "none", borderRadius: 9, background: TEAL, color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: title.trim() ? "pointer" : "default", opacity: title.trim() ? 1 : 0.5 }}>Post thread</button>
+        </div>
+      )}
+      {!threads && <p style={{ fontSize: 14, color: "var(--faint)" }}>Loading</p>}
+      {threads && threads.length === 0 && <p style={{ fontSize: 14, color: "var(--faint)" }}>No discussions yet. Start the first thread.</p>}
+      {threads?.map((t) => (
+        <button key={t.id} type="button" onClick={() => getThread(t.id, token).then(setOpen).catch(() => {})} style={{ ...cardStyle, textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <span style={{ minWidth: 0 }}>
+            <span style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--text)" }}>{t.title}</span>
+            <span style={{ fontSize: 12.5, color: "var(--faint)" }}>{t.author} · {relTime(t.created_at)}</span>
+          </span>
+          <span style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: "var(--muted)" }}>{t.reply_count} {t.reply_count === 1 ? "reply" : "replies"}</span>
+        </button>
+      ))}
+    </div>
+  );
 }

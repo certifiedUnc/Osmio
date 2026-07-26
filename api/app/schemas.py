@@ -313,3 +313,37 @@ class AttendanceRosterOut(BaseModel):
     code: str
     expires_at: datetime
     students: list[RosterStudent]
+
+
+# --- Discussion forum ---
+class ThreadIn(BaseModel):
+    title: str
+    body: str = ""
+
+
+class ReplyIn(BaseModel):
+    body: str
+
+
+class ThreadSummary(BaseModel):
+    id: int
+    title: str
+    author: str
+    reply_count: int
+    created_at: datetime
+
+
+class ReplyOut(BaseModel):
+    id: int
+    author: str
+    body: str
+    created_at: datetime
+
+
+class ThreadDetail(BaseModel):
+    id: int
+    title: str
+    body: str
+    author: str
+    created_at: datetime
+    replies: list[ReplyOut]

@@ -250,3 +250,32 @@ class PartnerCourseLicense(Base):
     course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), index=True)
 
     partner: Mapped["Partner"] = relationship(back_populates="licenses")
+
+
+class DiscussionThread(Base):
+    __tablename__ = "discussion_threads"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), index=True)
+    author_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    author: Mapped["User | None"] = relationship()
+    replies: Mapped[list["DiscussionReply"]] = relationship(
+        back_populates="thread", order_by="DiscussionReply.created_at", cascade="all, delete-orphan"
+    )
+
+
+class DiscussionReply(Base):
+    __tablename__ = "discussion_replies"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    thread_id: Mapped[int] = mapped_column(ForeignKey("discussion_threads.id"), index=True)
+    author_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    thread: Mapped["DiscussionThread"] = relationship(back_populates="replies")
+    author: Mapped["User | None"] = relationship()
