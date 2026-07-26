@@ -1,13 +1,15 @@
 import jwt
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, HTTPException, Request, Security, status
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .db import get_db
-from .models import Role, User
-from .security import decode_access_token
+from .models import Partner, PartnerApiKey, PartnerRequest, PartnerStatus, Role, User
+from .security import decode_access_token, verify_api_key
 
 bearer = HTTPBearer(auto_error=False)
+api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def get_current_user(
@@ -33,3 +35,47 @@ def require_role(*roles: Role):
         return user
 
     return dep
+
+
+def get_partner_key(
+    key: str | None = Security(api_key_scheme),
+    db: Session = Depends(get_db),
+) -> tuple[Partner, PartnerApiKey]:
+    """Resolve the partner behind an X-API-Key header. Keys are bcrypt-hashed, so we
+    narrow by the stored prefix and then verify against the hash."""
+    if not key:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "missing API key")
+    matched = None
+    for candidate in db.scalars(
+        select(PartnerApiKey).where(
+            PartnerApiKey.key_prefix == key[:12], PartnerApiKey.revoked.is_(False)
+        )
+    ):
+        if verify_api_key(key, candidate.key_hash):
+            matched = candidate
+            break
+    if matched is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid API key")
+    partner = db.get(Partner, matched.partner_id)
+    if partner is None or partner.status != PartnerStatus.active:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "partner is not active")
+    return partner, matched
+
+
+def partner_context(
+    request: Request,
+    ctx: tuple[Partner, PartnerApiKey] = Depends(get_partner_key),
+    db: Session = Depends(get_db),
+) -> Partner:
+    """Authenticate the partner and record the call in the usage meter."""
+    partner, key = ctx
+    db.add(
+        PartnerRequest(
+            partner_id=partner.id,
+            api_key_id=key.id,
+            method=request.method,
+            path=request.url.path,
+        )
+    )
+    db.commit()
+    return partner

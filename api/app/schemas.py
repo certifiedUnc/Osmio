@@ -313,3 +313,44 @@ class AttendanceRosterOut(BaseModel):
     code: str
     expires_at: datetime
     students: list[RosterStudent]
+
+
+# --- Partner content API (read-only, API-key auth) ---
+class PartnerLectureOut(BaseModel):
+    id: int
+    title: str
+    week: int
+    duration_s: int
+
+    class Config:
+        from_attributes = True
+
+
+class PartnerCourseOut(BaseModel):
+    id: int
+    code: str
+    title: str
+    term: str
+    lectures: list[PartnerLectureOut]
+
+
+class PartnerTranscriptOut(BaseModel):
+    lecture_id: int
+    title: str
+    segments: list[SegmentOut]
+
+
+class PartnerUsageItem(BaseModel):
+    method: str
+    path: str
+    status_code: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PartnerUsageOut(BaseModel):
+    partner: str
+    total: int
+    recent: list[PartnerUsageItem]

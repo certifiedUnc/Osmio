@@ -250,3 +250,19 @@ class PartnerCourseLicense(Base):
     course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), index=True)
 
     partner: Mapped["Partner"] = relationship(back_populates="licenses")
+
+
+class PartnerRequest(Base):
+    """One row per authenticated partner API call: the usage meter / billing log."""
+
+    __tablename__ = "partner_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    partner_id: Mapped[int] = mapped_column(ForeignKey("partners.id"), index=True)
+    api_key_id: Mapped[int | None] = mapped_column(
+        ForeignKey("partner_api_keys.id"), nullable=True
+    )
+    method: Mapped[str] = mapped_column(String(8))
+    path: Mapped[str] = mapped_column(String(300))
+    status_code: Mapped[int] = mapped_column(Integer, default=200)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
