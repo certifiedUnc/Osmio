@@ -21,6 +21,8 @@ from .models import (
     PartnerApiKey,
     PartnerCourseLicense,
     ProcessingStatus,
+    Quiz,
+    QuizQuestion,
     Role,
     Subject,
     TranscriptSegment,
@@ -194,6 +196,33 @@ def seed():
         )
         # Licensed for CS305 only, so the per-course scoping is visible in the demo.
         db.add(PartnerCourseLicense(partner_id=partner.id, course_id=course.id))
+
+        # A short auto-graded quiz on CS305 so students have one to take.
+        quiz = Quiz(course_id=course.id, title="PageRank basics")
+        db.add(quiz)
+        db.flush()
+        db.add_all(
+            [
+                QuizQuestion(
+                    quiz_id=quiz.id,
+                    prompt="What does a link from page A to page B represent in PageRank?",
+                    options=["A vote of confidence in B", "A payment to B", "A copy of B", "A deletion of B"],
+                    correct_index=0,
+                ),
+                QuizQuestion(
+                    quiz_id=quiz.id,
+                    prompt="Roughly what damping factor is typically used?",
+                    options=["0.15", "0.5", "0.85", "1.0"],
+                    correct_index=2,
+                ),
+                QuizQuestion(
+                    quiz_id=quiz.id,
+                    prompt="What problem does the teleportation term address?",
+                    options=["Slow networks", "Dangling nodes and rank sinks", "Spelling errors", "Video buffering"],
+                    correct_index=1,
+                ),
+            ]
+        )
 
         db.commit()
     finally:

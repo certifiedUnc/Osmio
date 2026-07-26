@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum as PyEnum
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -308,3 +308,39 @@ class DiscussionReply(Base):
 
     thread: Mapped["DiscussionThread"] = relationship(back_populates="replies")
     author: Mapped["User | None"] = relationship()
+
+
+class Quiz(Base):
+    __tablename__ = "quizzes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    questions: Mapped[list["QuizQuestion"]] = relationship(
+        back_populates="quiz", order_by="QuizQuestion.id", cascade="all, delete-orphan"
+    )
+
+
+class QuizQuestion(Base):
+    __tablename__ = "quiz_questions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    quiz_id: Mapped[int] = mapped_column(ForeignKey("quizzes.id"), index=True)
+    prompt: Mapped[str] = mapped_column(Text)
+    options: Mapped[list] = mapped_column(JSON)
+    correct_index: Mapped[int] = mapped_column(Integer)
+
+    quiz: Mapped["Quiz"] = relationship(back_populates="questions")
+
+
+class QuizAttempt(Base):
+    __tablename__ = "quiz_attempts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    quiz_id: Mapped[int] = mapped_column(ForeignKey("quizzes.id"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    score: Mapped[int] = mapped_column(Integer)
+    total: Mapped[int] = mapped_column(Integer)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
