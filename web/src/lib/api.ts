@@ -569,3 +569,48 @@ export interface Analytics {
 export function adminAnalytics(token: string): Promise<Analytics> {
   return request("/admin/analytics", authed(token));
 }
+
+// --- Discussion forum ---
+export interface DiscussionThread {
+  id: number;
+  title: string;
+  author: string;
+  reply_count: number;
+  created_at: string;
+}
+
+export interface DiscussionReply {
+  id: number;
+  author: string;
+  body: string;
+  created_at: string;
+}
+
+export interface DiscussionThreadDetail {
+  id: number;
+  title: string;
+  body: string;
+  author: string;
+  created_at: string;
+  replies: DiscussionReply[];
+}
+
+export function getThreads(courseId: number, token: string): Promise<DiscussionThread[]> {
+  return request(`/courses/${courseId}/threads`, authed(token));
+}
+
+export function createThread(
+  courseId: number,
+  payload: { title: string; body: string },
+  token: string,
+): Promise<DiscussionThreadDetail> {
+  return request(`/courses/${courseId}/threads`, authed(token, { method: "POST", body: JSON.stringify(payload) }));
+}
+
+export function getThread(threadId: number, token: string): Promise<DiscussionThreadDetail> {
+  return request(`/threads/${threadId}`, authed(token));
+}
+
+export function postReply(threadId: number, body: string, token: string): Promise<DiscussionThreadDetail> {
+  return request(`/threads/${threadId}/replies`, authed(token, { method: "POST", body: JSON.stringify({ body }) }));
+}

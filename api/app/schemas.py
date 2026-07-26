@@ -374,3 +374,37 @@ class AnalyticsOut(BaseModel):
     total_minutes: int
     partner_deliveries_week: int
     top_lectures: list[TopLecture]
+
+
+# --- Discussion forum ---
+class ThreadIn(BaseModel):
+    title: str
+    body: str = ""
+
+
+class ReplyIn(BaseModel):
+    body: str
+
+
+class ThreadSummary(BaseModel):
+    id: int
+    title: str
+    author: str
+    reply_count: int
+    created_at: datetime
+
+
+class ReplyOut(BaseModel):
+    id: int
+    author: str
+    body: str
+    created_at: datetime
+
+
+class ThreadDetail(BaseModel):
+    id: int
+    title: str
+    body: str
+    author: str
+    created_at: datetime
+    replies: list[ReplyOut]
