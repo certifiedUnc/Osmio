@@ -543,3 +543,12 @@ export function partnerGetUsage(key: string): Promise<PartnerUsage> {
 export function adminPartnerUsage(partnerId: number, token: string): Promise<PartnerUsage> {
   return request(`/admin/partners/${partnerId}/usage`, authed(token));
 }
+
+export interface PartnerDailyUsage {
+  date: string;
+  count: number;
+}
+
+export function partnerGetDailyUsage(key: string): Promise<PartnerDailyUsage[]> {
+  return partnerRequest("/usage/daily", key);
+}

@@ -354,3 +354,8 @@ class PartnerUsageOut(BaseModel):
     partner: str
     total: int
     recent: list[PartnerUsageItem]
+
+
+class PartnerDailyUsage(BaseModel):
+    date: str
+    count: int
