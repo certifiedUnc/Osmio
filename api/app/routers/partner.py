@@ -1,6 +1,8 @@
 """Read-only content API for licensed partners. Auth is by API key (X-API-Key); every
 call is scoped to the courses the partner is licensed for and recorded in the usage meter."""
 
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -10,6 +12,7 @@ from ..deps import partner_context
 from ..models import Course, Lecture, Partner, PartnerCourseLicense, PartnerRequest
 from ..schemas import (
     PartnerCourseOut,
+    PartnerDailyUsage,
     PartnerLectureOut,
     PartnerTranscriptOut,
     PartnerUsageItem,
@@ -113,3 +116,23 @@ def get_usage(partner: Partner = Depends(partner_context), db: Session = Depends
         total=total,
         recent=[PartnerUsageItem.model_validate(r) for r in recent],
     )
+
+
+@router.get("/usage/daily", response_model=list[PartnerDailyUsage])
+def get_daily_usage(partner: Partner = Depends(partner_context), db: Session = Depends(get_db)):
+    """Calls per day for the last 7 days, so the portal can chart the trend."""
+    window_start = datetime.now(timezone.utc) - timedelta(days=7)
+    stamps = db.scalars(
+        select(PartnerRequest.created_at).where(
+            PartnerRequest.partner_id == partner.id, PartnerRequest.created_at >= window_start
+        )
+    ).all()
+    counts: dict[str, int] = {}
+    for ts in stamps:
+        key = ts.date().isoformat()
+        counts[key] = counts.get(key, 0) + 1
+    today = datetime.now(timezone.utc).date()
+    return [
+        PartnerDailyUsage(date=(day := (today - timedelta(days=6 - i))).isoformat(), count=counts.get(day.isoformat(), 0))
+        for i in range(7)
+    ]

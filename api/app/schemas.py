@@ -457,3 +457,8 @@ class AttemptResult(BaseModel):
     score: int
     total: int
     results: list[QuestionResult]
+
+
+class PartnerDailyUsage(BaseModel):
+    date: str
+    count: int

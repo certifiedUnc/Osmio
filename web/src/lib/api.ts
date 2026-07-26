@@ -668,3 +668,12 @@ export function createQuiz(
 ): Promise<QuizSummary> {
   return request(`/instructor/courses/${courseId}/quizzes`, authed(token, { method: "POST", body: JSON.stringify(payload) }));
 }
+
+export interface PartnerDailyUsage {
+  date: string;
+  count: number;
+}
+
+export function partnerGetDailyUsage(key: string): Promise<PartnerDailyUsage[]> {
+  return partnerRequest("/usage/daily", key);
+}
