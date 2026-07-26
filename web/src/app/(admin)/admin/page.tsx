@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   ApiError,
+  adminAnalytics,
   adminCreateCourse,
   adminCreateKey,
   adminCreatePartner,
@@ -20,6 +21,7 @@ import {
   adminRevokeKey,
   adminSetRole,
   adminUnenroll,
+  type Analytics,
   type ApiKey,
   type ApiKeyCreated,
   type Course,
@@ -75,11 +77,74 @@ export default function AdminPage() {
     <main className="mx-auto max-w-4xl space-y-8 p-6">
       <h1 className="text-2xl font-semibold text-neutral-900">Admin</h1>
       {loadError && <p className="text-sm text-red-700">{loadError}</p>}
+      <AnalyticsSection token={token} />
       <UsersSection token={token} users={users} reload={loadUsers} />
       <CoursesSection token={token} courses={courses} users={users} reload={loadCourses} />
       <EnrollmentSection token={token} courses={courses} students={users.filter((u) => u.role === "student")} />
       <PartnersSection token={token} courses={courses} />
     </main>
+  );
+}
+
+function AnalyticsSection({ token }: { token: string }) {
+  const [data, setData] = useState<Analytics | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    adminAnalytics(token).then(setData).catch(() => setError("Could not load analytics."));
+  }, [token]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return (
+    <Card title="Analytics">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-neutral-500">
+          North-star: weekly active learning minutes across the app and the partner API.
+        </p>
+        <button type="button" onClick={load} className="text-xs text-neutral-500 hover:underline">
+          Refresh
+        </button>
+      </div>
+      {!data ? (
+        <p className="mt-3 text-sm text-neutral-400">Loading</p>
+      ) : (
+        <>
+          <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {[
+              { label: "Active minutes this week", value: data.active_minutes_week.toLocaleString(), hint: "internal watch-time" },
+              { label: "Active students this week", value: String(data.active_students_week), hint: "" },
+              { label: "Partner deliveries this week", value: String(data.partner_deliveries_week), hint: "lectures served via API" },
+              { label: "Total minutes", value: data.total_minutes.toLocaleString(), hint: "all time" },
+            ].map((s) => (
+              <div key={s.label} className="rounded border border-neutral-200 p-3">
+                <div className="text-2xl font-semibold text-neutral-900">{s.value}</div>
+                <div className="mt-1 text-xs text-neutral-500">{s.label}</div>
+                {s.hint && <div className="text-[11px] text-neutral-400">{s.hint}</div>}
+              </div>
+            ))}
+          </div>
+          {data.top_lectures.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Most-watched, last 30 days
+              </p>
+              <ul className="mt-1 space-y-1">
+                {data.top_lectures.map((l) => (
+                  <li key={l.lecture_id} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="truncate text-neutral-800">{l.title}</span>
+                    <span className="shrink-0 font-medium text-neutral-500">{l.minutes} min</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+      {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
+    </Card>
   );
 }
 

@@ -16,6 +16,7 @@ from ..models import (
     Enrollment,
     Exam,
     Lecture,
+    LearningEvent,
     Role,
     User,
 )
@@ -26,6 +27,7 @@ from ..schemas import (
     AttendanceMarkOut,
     CalendarEvent,
     CourseOut,
+    EventIn,
     StudentAssignmentOut,
     SubmissionIn,
     SubmissionOut,
@@ -107,6 +109,31 @@ def my_calendar(user: User = Depends(get_current_user), db: Session = Depends(ge
 
     events.sort(key=lambda ev: ev.at)
     return events
+
+
+@router.post("/me/events", status_code=status.HTTP_204_NO_CONTENT)
+def record_event(
+    payload: EventIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """A watch-time heartbeat from the player. Seconds are capped so seeking or a stuck
+    tab cannot inflate the meter."""
+    lecture = db.get(Lecture, payload.lecture_id)
+    if lecture is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "lecture not found")
+    seconds = max(0, min(payload.seconds, 120))
+    if seconds == 0:
+        return
+    db.add(
+        LearningEvent(
+            user_id=user.id,
+            lecture_id=lecture.id,
+            course_id=lecture.course_id,
+            seconds=seconds,
+        )
+    )
+    db.commit()
 
 
 @router.get("/courses/{course_id}/announcements", response_model=list[AnnouncementOut])

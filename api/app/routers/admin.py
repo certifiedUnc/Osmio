@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -7,6 +9,8 @@ from ..deps import require_role
 from ..models import (
     Course,
     Enrollment,
+    Lecture,
+    LearningEvent,
     Partner,
     PartnerApiKey,
     PartnerCourseLicense,
@@ -16,6 +20,7 @@ from ..models import (
 )
 from ..schemas import (
     AdminUserCreate,
+    AnalyticsOut,
     ApiKeyCreated,
     ApiKeyIn,
     ApiKeyOut,
@@ -30,6 +35,7 @@ from ..schemas import (
     PartnerUsageItem,
     PartnerUsageOut,
     RoleUpdate,
+    TopLecture,
     UserOut,
 )
 from ..security import generate_api_key, hash_api_key, hash_password
@@ -213,6 +219,57 @@ def grant_license(partner_id: int, payload: LicenseIn, db: Session = Depends(get
     db.commit()
     db.refresh(lic)
     return lic
+
+
+@router.get("/analytics", response_model=AnalyticsOut)
+def analytics(db: Session = Depends(get_db)):
+    """North-star dashboard: weekly active learning minutes and the signals around it."""
+    now = datetime.now(timezone.utc)
+    week_ago = now - timedelta(days=7)
+    month_ago = now - timedelta(days=30)
+
+    week_seconds = db.scalar(
+        select(func.coalesce(func.sum(LearningEvent.seconds), 0)).where(
+            LearningEvent.created_at >= week_ago
+        )
+    )
+    total_seconds = db.scalar(select(func.coalesce(func.sum(LearningEvent.seconds), 0)))
+    active_students = db.scalar(
+        select(func.count(func.distinct(LearningEvent.user_id))).where(
+            LearningEvent.created_at >= week_ago, LearningEvent.user_id.is_not(None)
+        )
+    )
+    deliveries = db.scalar(
+        select(func.count(PartnerRequest.id)).where(
+            PartnerRequest.created_at >= week_ago, PartnerRequest.path.like("%/lectures/%")
+        )
+    )
+
+    rows = db.execute(
+        select(LearningEvent.lecture_id, func.sum(LearningEvent.seconds).label("secs"))
+        .where(LearningEvent.created_at >= month_ago)
+        .group_by(LearningEvent.lecture_id)
+        .order_by(func.sum(LearningEvent.seconds).desc())
+        .limit(5)
+    ).all()
+    top = []
+    for lecture_id, secs in rows:
+        lecture = db.get(Lecture, lecture_id)
+        top.append(
+            TopLecture(
+                lecture_id=lecture_id,
+                title=lecture.title if lecture else f"Lecture {lecture_id}",
+                minutes=round((secs or 0) / 60),
+            )
+        )
+
+    return AnalyticsOut(
+        active_minutes_week=round((week_seconds or 0) / 60),
+        active_students_week=active_students or 0,
+        total_minutes=round((total_seconds or 0) / 60),
+        partner_deliveries_week=deliveries or 0,
+        top_lectures=top,
+    )
 
 
 @router.get("/partners/{partner_id}/usage", response_model=PartnerUsageOut)

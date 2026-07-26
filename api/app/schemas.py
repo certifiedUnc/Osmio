@@ -354,3 +354,23 @@ class PartnerUsageOut(BaseModel):
     partner: str
     total: int
     recent: list[PartnerUsageItem]
+
+
+# --- Analytics (north-star: active learning minutes) ---
+class EventIn(BaseModel):
+    lecture_id: int
+    seconds: int
+
+
+class TopLecture(BaseModel):
+    lecture_id: int
+    title: str
+    minutes: int
+
+
+class AnalyticsOut(BaseModel):
+    active_minutes_week: int
+    active_students_week: int
+    total_minutes: int
+    partner_deliveries_week: int
+    top_lectures: list[TopLecture]

@@ -266,3 +266,16 @@ class PartnerRequest(Base):
     path: Mapped[str] = mapped_column(String(300))
     status_code: Mapped[int] = mapped_column(Integer, default=200)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LearningEvent(Base):
+    """Watch-time events: the raw signal behind the north-star (active learning minutes)."""
+
+    __tablename__ = "learning_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    lecture_id: Mapped[int] = mapped_column(ForeignKey("lectures.id"), index=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id"), nullable=True)
+    seconds: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
