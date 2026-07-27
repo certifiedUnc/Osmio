@@ -170,7 +170,8 @@ export default function DeveloperPortal() {
         {/* API reference */}
         <div style={card}>
           <div style={label}>API reference</div>
-          <p style={{ fontSize: 13.5, color: "#64748B", margin: "10px 0 14px" }}>Authenticate every request with your key in the <code style={{ fontFamily: grotesk.style.fontFamily, background: "#F1F5F5", padding: "1px 6px", borderRadius: 5 }}>X-API-Key</code> header. Responses are scoped to your licensed courses.</p>
+          <p style={{ fontSize: 13.5, color: "#64748B", margin: "10px 0 6px" }}>Authenticate every request with your key in the <code style={{ fontFamily: grotesk.style.fontFamily, background: "#F1F5F5", padding: "1px 6px", borderRadius: 5 }}>X-API-Key</code> header. Responses are scoped to your licensed courses.</p>
+          <p style={{ fontSize: 13, color: "#94A3B8", margin: "0 0 14px" }}>Rate limit: 60 requests per minute per key. Exceeding it returns <code style={{ fontFamily: grotesk.style.fontFamily, background: "#F1F5F5", padding: "1px 6px", borderRadius: 5 }}>429</code> with a <code style={{ fontFamily: grotesk.style.fontFamily, background: "#F1F5F5", padding: "1px 6px", borderRadius: 5 }}>Retry-After</code> header.</p>
           <div style={{ background: "#0d1a2b", borderRadius: 10, padding: "14px 16px", position: "relative", marginBottom: 16 }}>
             <button type="button" onClick={() => { navigator.clipboard?.writeText(curl); setCopied(true); setTimeout(() => setCopied(false), 1500); }} style={{ position: "absolute", top: 10, right: 10, border: "1px solid #24384e", background: "#101f31", color: "#94A3B8", fontSize: 11.5, fontWeight: 600, borderRadius: 7, padding: "4px 10px", cursor: "pointer" }}>{copied ? "Copied" : "Copy"}</button>
             <pre className={grotesk.className} style={{ margin: 0, color: "#cfe6e2", fontSize: 12.5, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{curl}</pre>

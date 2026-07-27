@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Processing pipeline: delay per stage so status is observable while polling (seconds).
     pipeline_stage_delay_s: float = 1.5
 
+    # Partner content API: max requests per key per minute before returning 429.
+    partner_rate_limit_per_min: int = 60
+
     class Config:
         env_file = ".env"
 

@@ -1,9 +1,12 @@
+from datetime import datetime, timedelta, timezone
+
 import jwt
 from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from .config import settings
 from .db import get_db
 from .models import Partner, PartnerApiKey, PartnerRequest, PartnerStatus, Role, User
 from .security import decode_access_token, verify_api_key
@@ -67,15 +70,37 @@ def partner_context(
     ctx: tuple[Partner, PartnerApiKey] = Depends(get_partner_key),
     db: Session = Depends(get_db),
 ) -> Partner:
-    """Authenticate the partner and record the call in the usage meter."""
+    """Authenticate the partner, enforce the per-key rate limit, and record the call."""
     partner, key = ctx
+
+    limit = settings.partner_rate_limit_per_min
+    window_start = datetime.now(timezone.utc) - timedelta(seconds=60)
+    recent = (
+        db.scalar(
+            select(func.count(PartnerRequest.id)).where(
+                PartnerRequest.partner_id == partner.id,
+                PartnerRequest.created_at >= window_start,
+            )
+        )
+        or 0
+    )
+
+    status_code = 429 if recent >= limit else 200
     db.add(
         PartnerRequest(
             partner_id=partner.id,
             api_key_id=key.id,
             method=request.method,
             path=request.url.path,
+            status_code=status_code,
         )
     )
     db.commit()
+
+    if status_code == 429:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"rate limit exceeded ({limit} requests per minute)",
+            headers={"Retry-After": "60"},
+        )
     return partner
