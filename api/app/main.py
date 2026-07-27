@@ -1,18 +1,23 @@
 from contextlib import asynccontextmanager
 
+from alembic import command
+from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .db import Base, engine
 from .routers import admin, auth, discussions, instructor, lectures, me, partner, quizzes
 from .seed import seed
 
 
+def _run_migrations() -> None:
+    # Bring the schema up to date via Alembic, then seed a demo course on a fresh database.
+    command.upgrade(AlembicConfig("alembic.ini"), "head")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # PoC: create tables and seed a demo course on boot. Move to Alembic before the MVP.
-    Base.metadata.create_all(engine)
+    _run_migrations()
     seed()
     yield
 
