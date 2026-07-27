@@ -51,3 +51,8 @@ reset: ## Stop and wipe the database (reseeds on next start)
 ingest: ## Ingest a real lecture: make ingest COURSE=1 TITLE="..." WEEK=1 VIDEO_URL=...
 	docker compose exec api python scripts/ingest_lecture.py \
 		--course-id $(COURSE) --title "$(TITLE)" --week $(WEEK) --video-url "$(VIDEO_URL)"
+
+.PHONY: test
+test: ## Run the API test suite (in-memory SQLite, no live database needed)
+	docker compose run --rm --no-deps api sh -c \
+		"pip install -q -r requirements-dev.txt && python -m pytest tests/ -q"
