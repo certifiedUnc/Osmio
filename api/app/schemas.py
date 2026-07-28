@@ -79,6 +79,7 @@ class LectureCreate(BaseModel):
 
 class LectureDetail(LectureSummary):
     stream_uid: str
+    has_recording: bool = False
     segments: list[SegmentOut]
 
 
