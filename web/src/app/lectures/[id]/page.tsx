@@ -7,6 +7,7 @@ import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import CloudflarePlayer from "@/components/CloudflarePlayer";
 import MockPlayer from "@/components/MockPlayer";
+import RecordingPlayer from "@/components/RecordingPlayer";
 import type { PlayerHandle } from "@/components/playerTypes";
 import {
   ApiError,
@@ -267,6 +268,8 @@ export default function LecturePage({ params }: { params: Promise<{ id: string }
               )}
               {lecture.stream_uid ? (
                 <CloudflarePlayer src={lecture.stream_uid} onTimeUpdateMs={onTimeUpdateMs} handleRef={playerRef} />
+              ) : lecture.has_recording && token ? (
+                <RecordingPlayer lectureId={lecture.id} token={token} onTimeUpdateMs={onTimeUpdateMs} handleRef={playerRef} />
               ) : (
                 <MockPlayer durationMs={lecture.duration_s * 1000} onTimeUpdateMs={onTimeUpdateMs} handleRef={playerRef} />
               )}

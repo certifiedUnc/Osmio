@@ -257,6 +257,20 @@ export function processLecture(lectureId: number, token: string): Promise<Lectur
   return request(`/instructor/lectures/${lectureId}/process`, authed(token, { method: "POST" }));
 }
 
+export async function fetchLectureRecording(lectureId: number, token: string): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/lectures/${lectureId}/recording`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+  } catch {
+    throw new ApiError(0, "Could not reach the server.");
+  }
+  if (!res.ok) throw new ApiError(res.status, "Could not load the recording.");
+  return res.blob();
+}
+
 export function postAnnouncement(
   courseId: number,
   payload: { title: string; body: string },
