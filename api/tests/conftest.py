@@ -10,7 +10,10 @@ from sqlalchemy.pool import StaticPool
 import app.models  # noqa: F401  (register all tables on Base.metadata)
 from app.db import Base, get_db
 from app.main import app
+from datetime import datetime, timedelta, timezone
+
 from app.models import (
+    Assignment,
     Course,
     Enrollment,
     Lecture,
@@ -75,6 +78,11 @@ def ids(db):
     db.add(quiz)
     db.flush()
     db.add(QuizQuestion(quiz_id=quiz.id, prompt="2 + 2 = ?", options=["3", "4", "5"], correct_index=1))
+
+    assignment = Assignment(
+        course_id=course.id, title="Assignment One", due_at=datetime.now(timezone.utc) + timedelta(days=5)
+    )
+    db.add(assignment)
     db.commit()
 
     return {
@@ -82,6 +90,7 @@ def ids(db):
         "course2": course2.id,
         "lecture": lecture.id,
         "quiz": quiz.id,
+        "assignment": assignment.id,
         "partner": partner.id,
     }
 

@@ -3,14 +3,20 @@
 import { Instrument_Sans, Space_Grotesk } from "next/font/google";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  ApiError,
+  deleteSubmissionFile,
+  downloadSubmissionFile,
+  fmtFileSize,
   getMyAssignments,
   getMyCourses,
   submitAssignment,
+  uploadSubmissionFile,
   type Course,
   type StudentAssignment,
+  type SubmissionFile,
 } from "@/lib/api";
 import { homePath, useAuth } from "@/lib/auth";
 
@@ -219,8 +225,9 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
             {graded ? (
               <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: 26 }}>
                 <div className={grotesk.className} style={{ fontSize: 17, fontWeight: 600, color: "var(--text)", marginBottom: 16 }}>Your submission</div>
-                <p style={{ fontSize: 14.5, lineHeight: 1.6, color: "var(--text)", margin: 0, whiteSpace: "pre-wrap", padding: "14px 16px", background: "var(--surface2)", borderRadius: 11 }}>{sub!.body}</p>
-                <div style={{ fontSize: 12.5, color: "var(--faint)", marginTop: 10 }}>Submitted {relTime(sub!.submitted_at)}. This assignment has been graded and is locked.</div>
+                {sub!.body && <p style={{ fontSize: 14.5, lineHeight: 1.6, color: "var(--text)", margin: 0, whiteSpace: "pre-wrap", padding: "14px 16px", background: "var(--surface2)", borderRadius: 11 }}>{sub!.body}</p>}
+                <SubmissionFiles files={sub!.files} token={token} assignmentId={assignmentId} editable={false} onChange={load} />
+                <div style={{ fontSize: 12.5, color: "var(--faint)", marginTop: 12 }}>Submitted {relTime(sub!.submitted_at)}. This assignment has been graded and is locked.</div>
               </div>
             ) : (
               <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: 26 }}>
@@ -233,6 +240,7 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
                   style={{ width: "100%", minHeight: 160, resize: "vertical", padding: "13px 15px", border: "1px solid var(--border)", borderRadius: 11, background: "var(--surface)", color: "var(--text)", fontFamily: "inherit", fontSize: 14.5, lineHeight: 1.5, outline: "none" }}
                 />
                 {error && <p style={{ margin: "10px 0 0", fontSize: 13, color: "#dc2626" }}>{error}</p>}
+                <SubmissionFiles files={sub?.files ?? []} token={token} assignmentId={assignmentId} editable onChange={load} />
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 20, flexWrap: "wrap" }}>
                   <button type="button" onClick={submit} disabled={busy || !body.trim()} style={{ padding: "13px 22px", border: "none", borderRadius: 10, background: body.trim() ? TEAL : "var(--border)", color: "#fff", fontFamily: "inherit", fontSize: 14.5, fontWeight: 600, cursor: body.trim() && !busy ? "pointer" : "not-allowed", boxShadow: body.trim() ? "0 8px 20px -8px rgba(15,181,166,.6)" : "none" }}>{busy ? "Submitting" : sub ? "Resubmit" : "Submit assignment"}</button>
                   {sub && (
@@ -281,4 +289,78 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
 
 function Chevron() {
   return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>;
+}
+
+function SubmissionFiles({ files, token, assignmentId, editable, onChange }: {
+  files: SubmissionFile[];
+  token: string;
+  assignmentId: number;
+  editable?: boolean;
+  onChange: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = e.target.files;
+    if (!picked || picked.length === 0) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      for (const f of Array.from(picked)) await uploadSubmissionFile(assignmentId, f, token);
+      onChange();
+    } catch (e2) {
+      setErr(e2 instanceof ApiError ? e2.message : "Upload failed.");
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function remove(id: number) {
+    setBusy(true);
+    try {
+      await deleteSubmissionFile(id, token);
+      onChange();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: editable ? 20 : 14 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>Files</div>
+      {files.length === 0 && <p style={{ fontSize: 13.5, color: "var(--faint)", margin: "0 0 8px" }}>{editable ? "Attach your code, a PDF, or a zip (up to 25 MB)." : "No files attached."}</p>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {files.map((f) => (
+          <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 13px", border: "1px solid var(--border)", borderRadius: 10, background: "var(--surface2)" }}>
+            <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "var(--surface)", color: "var(--teal-text)", border: "1px solid var(--border)" }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.filename}</div>
+              <div style={{ fontSize: 12, color: "var(--faint)" }}>{fmtFileSize(f.size_bytes)}</div>
+            </div>
+            <button type="button" onClick={() => downloadSubmissionFile(f.id, f.filename, token).catch(() => {})} style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: "var(--teal-text)", background: "transparent", border: "none", cursor: "pointer" }}>Download</button>
+            {editable && (
+              <button type="button" onClick={() => remove(f.id)} disabled={busy} aria-label="Remove" style={{ flexShrink: 0, width: 28, height: 28, border: "none", borderRadius: 7, background: "transparent", cursor: "pointer", color: "var(--faint)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {editable && (
+        <>
+          <input ref={inputRef} type="file" multiple onChange={onPick} style={{ display: "none" }} />
+          <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 16px", border: "1px dashed var(--border)", borderRadius: 10, background: "var(--surface)", color: "var(--text)", fontFamily: "inherit", fontSize: 13.5, fontWeight: 600, cursor: busy ? "default" : "pointer" }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M17 8l-5-5-5 5" /><path d="M12 3v12" /></svg>
+            {busy ? "Uploading" : "Add file"}
+          </button>
+          {err && <p style={{ fontSize: 12.5, color: "#dc2626", marginTop: 6 }}>{err}</p>}
+        </>
+      )}
+    </div>
+  );
 }

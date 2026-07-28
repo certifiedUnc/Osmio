@@ -1,9 +1,13 @@
+import os
+import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user
 from ..models import (
@@ -18,6 +22,7 @@ from ..models import (
     Lecture,
     LearningEvent,
     Role,
+    SubmissionFile,
     User,
 )
 from ..schemas import (
@@ -29,6 +34,7 @@ from ..schemas import (
     CourseOut,
     EventIn,
     StudentAssignmentOut,
+    SubmissionFileOut,
     SubmissionIn,
     SubmissionOut,
 )
@@ -230,6 +236,109 @@ def submit_assignment(
     db.commit()
     db.refresh(submission)
     return submission
+
+
+@router.post(
+    "/assignments/{assignment_id}/files",
+    response_model=SubmissionFileOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def upload_submission_file(
+    assignment_id: int,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    assignment = db.get(Assignment, assignment_id)
+    if assignment is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "assignment not found")
+    enrolled = db.scalar(
+        select(Enrollment).where(
+            Enrollment.course_id == assignment.course_id, Enrollment.student_id == user.id
+        )
+    )
+    if user.role != Role.student or enrolled is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not enrolled in this course")
+
+    contents = file.file.read()
+    if not contents:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "the file is empty")
+    if len(contents) > settings.max_upload_bytes:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "file exceeds 25 MB")
+
+    # A submission holds the files; create an empty one on the first upload.
+    submission = db.scalar(
+        select(AssignmentSubmission).where(
+            AssignmentSubmission.assignment_id == assignment_id,
+            AssignmentSubmission.student_id == user.id,
+        )
+    )
+    if submission is None:
+        submission = AssignmentSubmission(assignment_id=assignment_id, student_id=user.id, body="")
+        db.add(submission)
+        db.flush()
+
+    os.makedirs(settings.upload_dir, exist_ok=True)
+    key = uuid.uuid4().hex
+    with open(os.path.join(settings.upload_dir, key), "wb") as out:
+        out.write(contents)
+
+    record = SubmissionFile(
+        submission_id=submission.id,
+        filename=file.filename or "upload",
+        content_type=file.content_type or "application/octet-stream",
+        size_bytes=len(contents),
+        storage_key=key,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def _submission_file_or_403(db: Session, user: User, file_id: int) -> SubmissionFile:
+    record = db.get(SubmissionFile, file_id)
+    if record is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "file not found")
+    submission = db.get(AssignmentSubmission, record.submission_id)
+    assignment = db.get(Assignment, submission.assignment_id)
+    course = db.get(Course, assignment.course_id)
+    is_owner = user.id == submission.student_id
+    is_staff = user.role == Role.admin or (
+        user.role == Role.instructor and course is not None and course.instructor_id == user.id
+    )
+    if not (is_owner or is_staff):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "you cannot access this file")
+    return record
+
+
+@router.get("/submission-files/{file_id}")
+def download_submission_file(
+    file_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    record = _submission_file_or_403(db, user, file_id)
+    path = os.path.join(settings.upload_dir, record.storage_key)
+    if not os.path.exists(path):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "stored file is missing")
+    return FileResponse(path, media_type=record.content_type, filename=record.filename)
+
+
+@router.delete("/submission-files/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_submission_file(
+    file_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    record = db.get(SubmissionFile, file_id)
+    if record is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "file not found")
+    submission = db.get(AssignmentSubmission, record.submission_id)
+    if user.id != submission.student_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "you can only remove your own files")
+    try:
+        os.remove(os.path.join(settings.upload_dir, record.storage_key))
+    except FileNotFoundError:
+        pass
+    db.delete(record)
+    db.commit()
 
 
 @router.post("/attendance/mark", response_model=AttendanceMarkOut)

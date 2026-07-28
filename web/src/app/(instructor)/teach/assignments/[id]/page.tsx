@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { use, useCallback, useEffect, useState } from "react";
 
-import { getSubmissions, gradeSubmission, type Submission } from "@/lib/api";
+import { downloadSubmissionFile, fmtFileSize, getSubmissions, gradeSubmission, type Submission } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 export default function GradeAssignmentPage({ params }: { params: Promise<{ id: string }> }) {
@@ -89,9 +89,26 @@ function SubmissionCard({
           submitted {new Date(submission.submitted_at).toLocaleString()}
         </span>
       </div>
-      <p className="mt-2 whitespace-pre-wrap rounded border border-neutral-200 p-2 text-sm text-neutral-800">
-        {submission.body}
-      </p>
+      {submission.body && (
+        <p className="mt-2 whitespace-pre-wrap rounded border border-neutral-200 p-2 text-sm text-neutral-800">
+          {submission.body}
+        </p>
+      )}
+      {submission.files.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {submission.files.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => downloadSubmissionFile(f.id, f.filename, token).catch(() => {})}
+              className="inline-flex items-center gap-1.5 rounded border border-neutral-200 px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-neutral-50"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>
+              {f.filename} <span className="text-neutral-400">({fmtFileSize(f.size_bytes)})</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <label className="text-xs text-neutral-500">
           Score

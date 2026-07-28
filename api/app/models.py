@@ -173,6 +173,26 @@ class AssignmentSubmission(Base):
     graded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     student: Mapped["User"] = relationship(foreign_keys=[student_id])
+    files: Mapped[list["SubmissionFile"]] = relationship(
+        back_populates="submission", cascade="all, delete-orphan", order_by="SubmissionFile.id"
+    )
+
+
+class SubmissionFile(Base):
+    __tablename__ = "submission_files"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    submission_id: Mapped[int] = mapped_column(
+        ForeignKey("assignment_submissions.id"), index=True
+    )
+    filename: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str] = mapped_column(String(120), default="application/octet-stream")
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    # Opaque name of the stored object; a local file today, swap for object storage in prod.
+    storage_key: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    submission: Mapped["AssignmentSubmission"] = relationship(back_populates="files")
 
 
 class Announcement(Base):

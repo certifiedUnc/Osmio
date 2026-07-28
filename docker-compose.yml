@@ -24,9 +24,11 @@ services:
       - "${API_PORT:-8000}:8000"
     volumes:
       - ./api:/app
+      - uploads:/data/uploads
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   pgdata:
+  uploads:
