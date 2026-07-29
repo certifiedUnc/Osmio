@@ -296,6 +296,18 @@ def upload_submission_file(
     return record
 
 
+def _sniff_recording_type(path: str) -> str:
+    """Recordings come from the browser's MediaRecorder, which is webm on Chrome and Firefox but
+    mp4 on Safari. Read the container's magic bytes so the player gets the right media type."""
+    with open(path, "rb") as fh:
+        head = fh.read(12)
+    if head[:4] == b"\x1a\x45\xdf\xa3":  # EBML header (webm/matroska)
+        return "video/webm"
+    if head[4:8] == b"ftyp":  # ISO base media (mp4)
+        return "video/mp4"
+    return "video/webm"
+
+
 @router.get("/lectures/{lecture_id}/recording")
 def stream_lecture_recording(
     lecture_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
@@ -324,7 +336,9 @@ def stream_lecture_recording(
     path = os.path.join(settings.upload_dir, lecture.source_key)
     if not os.path.exists(path):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "stored recording is missing")
-    return FileResponse(path, media_type="video/webm", content_disposition_type="inline")
+    return FileResponse(
+        path, media_type=_sniff_recording_type(path), content_disposition_type="inline"
+    )
 
 
 def _submission_file_or_403(db: Session, user: User, file_id: int) -> SubmissionFile:

@@ -47,6 +47,7 @@ export function LectureRecorder({
   const timerRef = useRef<number | null>(null);
   const durationRef = useRef(0);
   const previewUrlRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
 
   function stopTimer() {
     if (timerRef.current !== null) {
@@ -70,6 +71,7 @@ export function LectureRecorder({
   // Release the camera, timer, and object URL if the panel unmounts mid-recording.
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
       stopTimer();
       stopStream();
       clearPreview();
@@ -108,6 +110,7 @@ export function LectureRecorder({
       if (e.data.size > 0) chunksRef.current.push(e.data);
     };
     recorder.onstop = () => {
+      if (!mountedRef.current) return;
       const type = chunksRef.current[0]?.type || "video/webm";
       const blob = new Blob(chunksRef.current, { type });
       blobRef.current = blob;
