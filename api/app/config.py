@@ -5,6 +5,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://osmio:osmio@db:5432/osmio"
     cors_origins: str = "http://localhost:3000"
 
+    # "development" is the only environment allowed to run on default secrets.
+    environment: str = "development"
+
     # Auth
     jwt_secret: str = "dev-secret-change-me"
     jwt_expire_minutes: int = 60 * 24 * 7

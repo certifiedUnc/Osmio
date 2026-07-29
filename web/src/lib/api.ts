@@ -143,24 +143,44 @@ export function getCourses(): Promise<Course[]> {
   return request<Course[]>("/courses", { next: { revalidate: 300 } });
 }
 
-export function getLecture(id: number): Promise<LectureDetail> {
-  return request<LectureDetail>(`/lectures/${id}`, { next: { revalidate: 60 } });
+export function getLecture(id: number, token: string): Promise<LectureDetail> {
+  return request<LectureDetail>(`/lectures/${id}`, authed(token, { cache: "no-store" }));
 }
 
-export function transcriptUrl(lectureId: number, format: "txt" | "pdf"): string {
-  return `${API_BASE}/lectures/${lectureId}/transcript.${format}`;
-}
-
-export function getQuestions(lectureId: number): Promise<Question[]> {
-  return request<Question[]>(`/lectures/${lectureId}/questions`, { cache: "no-store" });
-}
-
-export function askQuestion(lectureId: number, input: QuestionInput): Promise<Question> {
-  return request<Question>(`/lectures/${lectureId}/questions`, {
-    method: "POST",
+export async function downloadTranscript(
+  lectureId: number,
+  format: "txt" | "pdf",
+  token: string,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/lectures/${lectureId}/transcript.${format}`, {
+    headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
-    body: JSON.stringify(input),
   });
+  if (!res.ok) throw new ApiError(res.status, "Could not download the transcript.");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `lecture-${lectureId}-transcript.${format}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export function getQuestions(lectureId: number, token: string): Promise<Question[]> {
+  return request<Question[]>(`/lectures/${lectureId}/questions`, authed(token, { cache: "no-store" }));
+}
+
+export function askQuestion(
+  lectureId: number,
+  input: QuestionInput,
+  token: string,
+): Promise<Question> {
+  return request<Question>(
+    `/lectures/${lectureId}/questions`,
+    authed(token, { method: "POST", cache: "no-store", body: JSON.stringify(input) }),
+  );
 }
 
 // Merge a bearer token into a request, and never cache authed reads.

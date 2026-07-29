@@ -12,13 +12,13 @@ import type { PlayerHandle } from "@/components/playerTypes";
 import {
   ApiError,
   askQuestion,
+  downloadTranscript,
   formatTimestamp,
   getAnnouncements,
   getCourses,
   getLecture,
   getQuestions,
   recordEvent,
-  transcriptUrl,
   type Announcement,
   type Course,
   type LectureDetail,
@@ -73,7 +73,7 @@ function relTime(iso: string) {
 export default function LecturePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const lectureId = Number(id);
-  const { token, user, logout } = useAuth();
+  const { token, user, logout, ready } = useAuth();
   const router = useRouter();
 
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -109,26 +109,34 @@ export default function LecturePage({ params }: { params: Promise<{ id: string }
     return () => clearInterval(id);
   }, [token, lecture, lectureId]);
 
-  // Lecture + questions are public; anyone with the link can watch.
+  // Lecture content is gated to enrolled students and course staff, so wait for auth to resolve
+  // and send the token. Signed-out visitors are bounced to the login page.
   useEffect(() => {
     if (!Number.isInteger(lectureId)) {
       setError("Lecture not found.");
       return;
     }
-    getLecture(lectureId)
+    if (!ready) return;
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+    getLecture(lectureId, token)
       .then(setLecture)
       .catch((err) =>
         setError(
           err instanceof ApiError && err.status === 404
             ? "Lecture not found."
-            : "Could not load this lecture. Is the API running?",
+            : err instanceof ApiError && err.status === 403
+              ? "You do not have access to this lecture."
+              : "Could not load this lecture. Is the API running?",
         ),
       );
-    getQuestions(lectureId).then(setQuestions).catch(() => {});
+    getQuestions(lectureId, token).then(setQuestions).catch(() => {});
     getCourses()
       .then((courses) => setCourse(courses.find((c) => c.lectures.some((l) => l.id === lectureId)) ?? null))
       .catch(() => {});
-  }, [lectureId]);
+  }, [lectureId, token, ready, router]);
 
   // Announcements live behind auth and need the course id.
   useEffect(() => {
@@ -292,9 +300,9 @@ export default function LecturePage({ params }: { params: Promise<{ id: string }
               })}
             </div>
 
-            {tab === "overview" && <Overview lecture={lecture} />}
+            {tab === "overview" && <Overview lecture={lecture} token={token ?? ""} />}
             {tab === "transcript" && <Transcript lecture={lecture} currentTimeMs={currentTimeMs} onSeek={seek} />}
-            {tab === "qa" && <Qa lectureId={lecture.id} questions={questions} setQuestions={setQuestions} currentTimeMs={currentTimeMs} onSeek={seek} />}
+            {tab === "qa" && <Qa lectureId={lecture.id} token={token ?? ""} questions={questions} setQuestions={setQuestions} currentTimeMs={currentTimeMs} onSeek={seek} />}
             {tab === "notes" && <Notes notes={notes} save={saveNotes} currentTimeMs={currentTimeMs} onSeek={seek} />}
             {tab === "announcements" && <Announcements items={announcements} loggedIn={!!user} code={course?.code} />}
           </section>
@@ -344,7 +352,7 @@ function Chevron() {
   return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>;
 }
 
-function Overview({ lecture }: { lecture: LectureDetail }) {
+function Overview({ lecture, token }: { lecture: LectureDetail; token: string }) {
   const hasTranscript = lecture.segments.length > 0;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -356,7 +364,7 @@ function Overview({ lecture }: { lecture: LectureDetail }) {
           <div style={{ fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--faint)", marginBottom: 12 }}>Resources</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {([["txt", "Transcript", "Plain text · .txt"], ["pdf", "Transcript", "Formatted · .pdf"]] as const).map(([fmt, name, meta]) => (
-              <a key={fmt} href={transcriptUrl(lecture.id, fmt)} target="_blank" rel="noopener" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: "1px solid var(--border)", borderRadius: 11, background: "var(--surface)", color: "var(--text)" }}>
+              <button key={fmt} type="button" onClick={() => downloadTranscript(lecture.id, fmt, token).catch(() => {})} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: "1px solid var(--border)", borderRadius: 11, background: "var(--surface)", color: "var(--text)", cursor: "pointer", textAlign: "left" }}>
                 <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 9, background: "var(--teal-soft)", color: "var(--teal-text)" }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>
                 </span>
@@ -364,7 +372,7 @@ function Overview({ lecture }: { lecture: LectureDetail }) {
                   <span style={{ fontSize: 14, fontWeight: 600 }}>{name} ({fmt.toUpperCase()})</span>
                   <span style={{ fontSize: 12, color: "var(--faint)" }}>{meta}</span>
                 </span>
-              </a>
+              </button>
             ))}
           </div>
         </div>
@@ -406,8 +414,8 @@ function Transcript({ lecture, currentTimeMs, onSeek }: { lecture: LectureDetail
   );
 }
 
-function Qa({ lectureId, questions, setQuestions, currentTimeMs, onSeek }: {
-  lectureId: number; questions: Question[]; setQuestions: React.Dispatch<React.SetStateAction<Question[]>>; currentTimeMs: number; onSeek: (ms: number) => void;
+function Qa({ lectureId, token, questions, setQuestions, currentTimeMs, onSeek }: {
+  lectureId: number; token: string; questions: Question[]; setQuestions: React.Dispatch<React.SetStateAction<Question[]>>; currentTimeMs: number; onSeek: (ms: number) => void;
 }) {
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -426,7 +434,7 @@ function Qa({ lectureId, questions, setQuestions, currentTimeMs, onSeek }: {
     setErr(null);
     setSubmitting(true);
     try {
-      const saved = await askQuestion(lectureId, { timestamp_ms: ms, body: trimmed });
+      const saved = await askQuestion(lectureId, { timestamp_ms: ms, body: trimmed }, token);
       setQuestions((prev) => insertSorted(prev.filter((q) => q.id !== tempId), saved));
     } catch (e) {
       setQuestions((prev) => prev.filter((q) => q.id !== tempId));
