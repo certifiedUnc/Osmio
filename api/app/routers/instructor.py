@@ -1,10 +1,13 @@
+import os
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..db import get_db
 from ..deps import require_role
 from ..models import (
@@ -95,6 +98,50 @@ def create_lecture(
         duration_s=payload.duration_s,
         stream_uid=payload.stream_uid,
         scheduled_at=payload.scheduled_at,
+        uploaded_by=user.id,
+        status=ProcessingStatus.uploaded,
+    )
+    db.add(lecture)
+    db.commit()
+    db.refresh(lecture)
+    return lecture
+
+
+@router.post(
+    "/lectures/record",
+    response_model=LectureSummary,
+    status_code=status.HTTP_201_CREATED,
+)
+def record_lecture(
+    course_id: int = Form(...),
+    title: str = Form(...),
+    week: int = Form(1),
+    duration_s: int = Form(0),
+    file: UploadFile = File(...),
+    user: User = Depends(require_role(Role.instructor, Role.admin)),
+    db: Session = Depends(get_db),
+):
+    """Save a lecture captured in the browser. The recording lands on the uploads volume and its
+    key is stored on the lecture so the pipeline can transcribe the real audio when it runs."""
+    _course_owned(db, course_id, user)
+
+    contents = file.file.read()
+    if not contents:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "the recording is empty")
+    if len(contents) > settings.max_recording_bytes:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "recording is too large")
+
+    os.makedirs(settings.upload_dir, exist_ok=True)
+    key = uuid.uuid4().hex
+    with open(os.path.join(settings.upload_dir, key), "wb") as out:
+        out.write(contents)
+
+    lecture = Lecture(
+        course_id=course_id,
+        title=title.strip() or "Untitled lecture",
+        week=week,
+        duration_s=max(duration_s, 0),
+        source_key=key,
         uploaded_by=user.id,
         status=ProcessingStatus.uploaded,
     )

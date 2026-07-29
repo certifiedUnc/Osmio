@@ -2,7 +2,7 @@
 
 Runs as a background job. Each stage updates the lecture's status so an instructor can watch
 progress. Audio normalization is a placeholder step here; transcription delegates to
-transcription.transcribe.
+transcription.transcribe_lecture, which uses the real recording when one is available.
 """
 
 import time
@@ -10,7 +10,7 @@ import time
 from .config import settings
 from .db import SessionLocal
 from .models import Lecture, ProcessingStatus, TranscriptSegment
-from .transcription import transcribe
+from .transcription import transcribe_lecture
 
 
 def run_pipeline(lecture_id: int) -> None:
@@ -29,7 +29,7 @@ def run_pipeline(lecture_id: int) -> None:
         # Transcription.
         lecture.status = ProcessingStatus.transcribing
         db.commit()
-        segments = transcribe(lecture)
+        segments = transcribe_lecture(lecture)
         time.sleep(delay)
 
         for existing in list(lecture.segments):

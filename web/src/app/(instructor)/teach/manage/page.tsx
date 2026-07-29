@@ -7,7 +7,6 @@ import { useCallback, useEffect, useState } from "react";
 import {
   createAssignment,
   createExam,
-  createLecture,
   getCourseAssignments,
   getMyCourses,
   openAttendance,
@@ -18,8 +17,10 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
+import { LectureRecorder } from "./LectureRecorder";
+
 const STATUS_LABEL: Record<string, string> = {
-  uploaded: "Uploaded",
+  uploaded: "Recorded",
   normalizing: "Normalizing audio",
   transcribing: "Transcribing",
   review: "In review",
@@ -76,11 +77,6 @@ export default function TeachPage() {
 
 function CoursePanel({ course, token }: { course: Course; token: string }) {
   const [lectures, setLectures] = useState<LectureSummary[]>(course.lectures);
-  const [title, setTitle] = useState("");
-  const [week, setWeek] = useState(1);
-  const [duration, setDuration] = useState(60);
-  const [schedule, setSchedule] = useState("");
-  const [adding, setAdding] = useState(false);
   const [opError, setOpError] = useState<string | null>(null);
 
   const [annTitle, setAnnTitle] = useState("");
@@ -114,32 +110,6 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
       router.push(`/teach/attendance/${session.id}`);
     } catch {
       setOpError("Could not start attendance.");
-    }
-  }
-
-  async function addLecture(e: React.FormEvent) {
-    e.preventDefault();
-    if (adding || !title.trim()) return;
-    setAdding(true);
-    setOpError(null);
-    try {
-      const l = await createLecture(
-        {
-          course_id: course.id,
-          title: title.trim(),
-          week,
-          duration_s: duration,
-          scheduled_at: schedule ? new Date(schedule).toISOString() : undefined,
-        },
-        token,
-      );
-      setLectures((prev) => [...prev, l]);
-      setTitle("");
-      setSchedule("");
-    } catch {
-      setOpError("Could not add lecture. Please try again.");
-    } finally {
-      setAdding(false);
     }
   }
 
@@ -250,50 +220,14 @@ function CoursePanel({ course, token }: { course: Course; token: string }) {
             )}
           </ul>
 
-          <form onSubmit={addLecture} className="mt-3 flex flex-wrap items-end gap-2">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Lecture title"
-              className="min-w-[12rem] flex-1 rounded border border-neutral-300 px-2 py-1.5 text-sm outline-none focus:border-neutral-500"
-            />
-            <label className="text-xs text-neutral-500">
-              Week
-              <input
-                type="number"
-                min={1}
-                value={week}
-                onChange={(e) => setWeek(Number(e.target.value))}
-                className="ml-1 w-16 rounded border border-neutral-300 px-2 py-1.5 text-sm"
-              />
-            </label>
-            <label className="text-xs text-neutral-500">
-              Seconds
-              <input
-                type="number"
-                min={1}
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="ml-1 w-20 rounded border border-neutral-300 px-2 py-1.5 text-sm"
-              />
-            </label>
-            <label className="text-xs text-neutral-500">
-              Date
-              <input
-                type="datetime-local"
-                value={schedule}
-                onChange={(e) => setSchedule(e.target.value)}
-                className="ml-1 rounded border border-neutral-300 px-2 py-1.5 text-sm"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={adding || !title.trim()}
-              className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
-            >
-              Add lecture
-            </button>
-          </form>
+          <LectureRecorder
+            courseId={course.id}
+            token={token}
+            onCreated={(l) => {
+              setLectures((prev) => [...prev, l]);
+              openProcessing(l.id);
+            }}
+          />
           {opError && <p className="mt-2 text-xs text-red-700">{opError}</p>}
         </div>
 

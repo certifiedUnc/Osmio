@@ -87,6 +87,7 @@ export interface License {
 
 export interface LectureDetail extends LectureSummary {
   stream_uid: string;
+  has_recording: boolean;
   segments: Segment[];
 }
 
@@ -210,8 +211,64 @@ export function createLecture(payload: LectureCreate, token: string): Promise<Le
   return request("/instructor/lectures", authed(token, { method: "POST", body: JSON.stringify(payload) }));
 }
 
+export interface LectureRecordMeta {
+  course_id: number;
+  title: string;
+  week: number;
+  duration_s: number;
+}
+
+export async function uploadLectureRecording(
+  meta: LectureRecordMeta,
+  recording: Blob,
+  token: string,
+): Promise<LectureSummary> {
+  const form = new FormData();
+  form.append("course_id", String(meta.course_id));
+  form.append("title", meta.title);
+  form.append("week", String(meta.week));
+  form.append("duration_s", String(meta.duration_s));
+  form.append("file", recording, "lecture.webm");
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/instructor/lectures/record`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+      cache: "no-store",
+    });
+  } catch {
+    throw new ApiError(0, "Could not reach the server.");
+  }
+  if (!res.ok) {
+    let detail = res.statusText || `HTTP ${res.status}`;
+    try {
+      const data = await res.json();
+      if (data?.detail) detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+    } catch {
+      /* body wasn't JSON */
+    }
+    throw new ApiError(res.status, detail);
+  }
+  return res.json() as Promise<LectureSummary>;
+}
+
 export function processLecture(lectureId: number, token: string): Promise<LectureSummary> {
   return request(`/instructor/lectures/${lectureId}/process`, authed(token, { method: "POST" }));
+}
+
+export async function fetchLectureRecording(lectureId: number, token: string): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/lectures/${lectureId}/recording`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+  } catch {
+    throw new ApiError(0, "Could not reach the server.");
+  }
+  if (!res.ok) throw new ApiError(res.status, "Could not load the recording.");
+  return res.blob();
 }
 
 export function postAnnouncement(

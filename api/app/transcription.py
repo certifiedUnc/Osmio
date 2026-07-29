@@ -1,8 +1,11 @@
 """Transcription for the pipeline.
 
-transcribe_url() is the real thing: it sends media to Groq's Whisper and returns timestamped
-segments. transcribe() is the placeholder the auto-pipeline uses when no audio is wired up yet.
+transcribe_file()/transcribe_url() are the real thing: they send media to Groq's Whisper and
+return timestamped segments. transcribe() is the placeholder used when there is no recording to
+work from, or when a real transcription is unavailable.
 """
+
+import os
 
 import httpx
 
@@ -19,18 +22,12 @@ class TranscriptionError(RuntimeError):
     pass
 
 
-def transcribe_url(media_url: str) -> list[Segment]:
-    """Download media from media_url and transcribe it with Groq Whisper.
-
-    Note: Groq's free tier caps the upload (~25MB), so use a short clip or an audio-only file.
-    """
+def _groq_transcribe(filename: str, content: bytes, content_type: str) -> list[Segment]:
+    """Post a media blob to Groq Whisper and parse the segment timings it returns."""
     if not settings.groq_api_key:
         raise TranscriptionError("GROQ_API_KEY must be set")
 
     with httpx.Client(timeout=300) as client:
-        media = client.get(media_url, follow_redirects=True)
-        media.raise_for_status()
-        filename = media_url.split("?")[0].rsplit("/", 1)[-1] or "audio"
         resp = client.post(
             GROQ_URL,
             headers={"Authorization": f"Bearer {settings.groq_api_key}"},
@@ -39,9 +36,7 @@ def transcribe_url(media_url: str) -> list[Segment]:
                 "response_format": "verbose_json",
                 "timestamp_granularities[]": "segment",
             },
-            files={
-                "file": (filename, media.content, media.headers.get("content-type", "application/octet-stream"))
-            },
+            files={"file": (filename, content, content_type)},
         )
     if resp.status_code != 200:
         raise TranscriptionError(f"Groq error {resp.status_code}: {resp.text[:300]}")
@@ -51,6 +46,43 @@ def transcribe_url(media_url: str) -> list[Segment]:
         (int(float(s["start"]) * 1000), int(float(s["end"]) * 1000), s["text"].strip())
         for s in segments
     ]
+
+
+def transcribe_file(path: str, filename: str = "audio") -> list[Segment]:
+    """Transcribe a recording sitting on disk with Groq Whisper.
+
+    Note: Groq caps the upload (~25MB), so long recordings fall back to the placeholder upstream.
+    """
+    with open(path, "rb") as fh:
+        content = fh.read()
+    return _groq_transcribe(filename, content, "application/octet-stream")
+
+
+def transcribe_url(media_url: str) -> list[Segment]:
+    """Download media from media_url and transcribe it with Groq Whisper."""
+    with httpx.Client(timeout=300) as client:
+        media = client.get(media_url, follow_redirects=True)
+        media.raise_for_status()
+        filename = media_url.split("?")[0].rsplit("/", 1)[-1] or "audio"
+        content_type = media.headers.get("content-type", "application/octet-stream")
+    return _groq_transcribe(filename, media.content, content_type)
+
+
+def transcribe_lecture(lecture: Lecture) -> list[Segment]:
+    """Transcribe a lecture's recording when we have one and a Groq key is configured.
+
+    Falls back to the placeholder transcript when there is no recording on disk, no API key, or
+    the real transcription fails (for example a clip past Groq's size limit)."""
+    if lecture.source_key and settings.groq_api_key:
+        path = os.path.join(settings.upload_dir, lecture.source_key)
+        if os.path.exists(path):
+            try:
+                segments = transcribe_file(path, f"{lecture.source_key}.webm")
+                if segments:
+                    return segments
+            except (TranscriptionError, httpx.HTTPError):
+                pass
+    return transcribe(lecture)
 
 
 _PLACEHOLDER_LINES = [

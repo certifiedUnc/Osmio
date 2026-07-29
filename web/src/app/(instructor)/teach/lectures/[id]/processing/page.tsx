@@ -148,7 +148,7 @@ export default function ProcessingPage({ params }: { params: Promise<{ id: strin
     { k: "Week", v: `Week ${lecture.week}` },
     { k: "Duration", v: fmtDur(lecture.duration_s) },
     { k: "Transcript", v: lecture.segments.length ? `${lecture.segments.length} segments` : "Pending" },
-    { k: "Video", v: lecture.stream_uid ? "Cloudflare Stream" : "Not attached" },
+    { k: "Video", v: lecture.stream_uid ? "Cloudflare Stream" : lecture.has_recording ? "Recording attached" : "Not attached" },
     { k: "Status", v: STATUS_LABEL[status] ?? status },
   ];
 

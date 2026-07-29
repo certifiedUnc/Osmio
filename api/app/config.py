@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     upload_dir: str = "/data/uploads"
     max_upload_bytes: int = 25 * 1024 * 1024  # 25 MB
 
+    # Lecture recordings captured in the browser. Larger than a document upload; the transcriber
+    # still tops out around Groq's 25 MB limit, past which it falls back to a placeholder transcript.
+    max_recording_bytes: int = 200 * 1024 * 1024  # 200 MB
+
     class Config:
         env_file = ".env"
 

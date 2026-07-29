@@ -109,6 +109,10 @@ class Lecture(Base):
     )
     questions: Mapped[list["Question"]] = relationship(back_populates="lecture")
 
+    @property
+    def has_recording(self) -> bool:
+        return bool(self.source_key)
+
 
 class TranscriptSegment(Base):
     __tablename__ = "transcript_segments"
