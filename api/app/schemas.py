@@ -252,6 +252,17 @@ class SubmissionIn(BaseModel):
     body: str
 
 
+class SubmissionFileOut(BaseModel):
+    id: int
+    filename: str
+    content_type: str
+    size_bytes: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class SubmissionOut(BaseModel):
     id: int
     assignment_id: int
@@ -262,6 +273,7 @@ class SubmissionOut(BaseModel):
     score: int | None
     feedback: str
     graded_at: datetime | None
+    files: list[SubmissionFileOut] = []
 
     class Config:
         from_attributes = True

@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     # Partner content API: max requests per key per minute before returning 429.
     partner_rate_limit_per_min: int = 60
 
+    # Assignment file uploads. Stored on a local volume for now; swap for object storage in prod.
+    upload_dir: str = "/data/uploads"
+    max_upload_bytes: int = 25 * 1024 * 1024  # 25 MB
+
     class Config:
         env_file = ".env"
 

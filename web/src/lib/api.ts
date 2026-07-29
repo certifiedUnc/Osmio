@@ -258,6 +258,14 @@ export interface Exam {
   duration_min: number;
 }
 
+export interface SubmissionFile {
+  id: number;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+
 export interface Submission {
   id: number;
   assignment_id: number;
@@ -268,6 +276,7 @@ export interface Submission {
   score: number | null;
   feedback: string;
   graded_at: string | null;
+  files: SubmissionFile[];
 }
 
 export interface StudentAssignment {
@@ -352,6 +361,70 @@ export function submitAssignment(
     `/assignments/${assignmentId}/submissions`,
     authed(token, { method: "POST", body: JSON.stringify({ body }) }),
   );
+}
+
+// Multipart upload: let the browser set the boundary, so no JSON Content-Type here.
+export async function uploadSubmissionFile(
+  assignmentId: number,
+  file: File,
+  token: string,
+): Promise<SubmissionFile> {
+  const form = new FormData();
+  form.append("file", file);
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/assignments/${assignmentId}/files`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+      cache: "no-store",
+    });
+  } catch {
+    throw new ApiError(0, "Could not reach the server.");
+  }
+  if (!res.ok) {
+    let detail = res.statusText || `HTTP ${res.status}`;
+    try {
+      const data = await res.json();
+      if (data?.detail) detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+    } catch {
+      /* body wasn't JSON */
+    }
+    throw new ApiError(res.status, detail);
+  }
+  return res.json() as Promise<SubmissionFile>;
+}
+
+export function deleteSubmissionFile(fileId: number, token: string): Promise<void> {
+  return request(`/submission-files/${fileId}`, authed(token, { method: "DELETE" }));
+}
+
+// Files are private, so fetch with the token and stream to a download rather than a plain link.
+export async function downloadSubmissionFile(
+  fileId: number,
+  filename: string,
+  token: string,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/submission-files/${fileId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new ApiError(res.status, "Could not download the file.");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export function fmtFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function getSubmissions(assignmentId: number, token: string): Promise<Submission[]> {
