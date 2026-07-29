@@ -20,7 +20,7 @@ def test_record_lecture_creates_and_attaches(client, ids, instructor_token, tmp_
     assert body["status"] == "uploaded"
     assert body["published"] is False
 
-    detail = client.get(f"/lectures/{body['id']}").json()
+    detail = client.get(f"/lectures/{body['id']}", headers=auth(instructor_token)).json()
     assert detail["has_recording"] is True
 
     # The bytes actually landed on the uploads volume.
@@ -89,6 +89,62 @@ def test_recording_serves_mp4_container(client, ids, student_token, instructor_t
 def test_recording_missing_when_no_source(client, ids, student_token):
     # The seeded lecture has no recording attached.
     assert client.get(f"/lectures/{ids['lecture']}/recording", headers=auth(student_token)).status_code == 404
+
+
+def _outsider(client):
+    return client.post("/auth/login", json={"email": "out@t.dev", "password": "password"}).json()["access_token"]
+
+
+def test_lecture_content_requires_auth_and_enrollment(client, ids, student_token):
+    lid = ids["lecture"]  # published, in the course the seeded student is enrolled in
+    assert client.get(f"/lectures/{lid}").status_code == 401
+    assert client.get(f"/lectures/{lid}", headers=auth(student_token)).status_code == 200
+    assert client.get(f"/lectures/{lid}", headers=auth(_outsider(client))).status_code == 403
+
+    assert client.get(f"/lectures/{lid}/transcript.txt").status_code == 401
+    assert client.get(f"/lectures/{lid}/transcript.txt", headers=auth(student_token)).status_code == 200
+    assert client.get(f"/lectures/{lid}/transcript.txt", headers=auth(_outsider(client))).status_code == 403
+
+
+def test_unpublished_lecture_hidden_from_students(client, ids, student_token, instructor_token, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "upload_dir", str(tmp_path))
+    rec = client.post(
+        "/instructor/lectures/record",
+        headers=auth(instructor_token),
+        data={"course_id": ids["course"], "title": "Draft", "week": 1, "duration_s": 5},
+        files={"file": ("lecture.webm", b"\x1a\x45\xdf\xa3body", "video/webm")},
+    )
+    draft_id = rec.json()["id"]  # status uploaded, not published
+    # Enrolled student gets a 404 (existence hidden); the course instructor can still see it.
+    assert client.get(f"/lectures/{draft_id}", headers=auth(student_token)).status_code == 404
+    assert client.get(f"/lectures/{draft_id}", headers=auth(instructor_token)).status_code == 200
+
+
+def test_question_author_is_the_authenticated_user(client, ids, student_token):
+    lid = ids["lecture"]
+    assert client.post(f"/lectures/{lid}/questions", json={"timestamp_ms": 0, "body": "hi"}).status_code == 401
+    resp = client.post(
+        f"/lectures/{lid}/questions",
+        headers=auth(student_token),
+        json={"timestamp_ms": 0, "body": "hi", "author": "Prof Impersonator"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["author"] == "Stu Dent"  # derived from the user, not the request body
+
+
+def test_course_content_requires_access(client, ids, student_token):
+    cid = ids["course"]
+    out = _outsider(client)
+    assert client.get(f"/courses/{cid}/announcements", headers=auth(student_token)).status_code == 200
+    assert client.get(f"/courses/{cid}/assignments", headers=auth(student_token)).status_code == 200
+    assert client.get(f"/courses/{cid}/announcements", headers=auth(out)).status_code == 403
+    assert client.get(f"/courses/{cid}/assignments", headers=auth(out)).status_code == 403
+
+
+def test_watch_events_require_enrollment(client, ids, student_token):
+    lid = ids["lecture"]
+    assert client.post("/me/events", headers=auth(student_token), json={"lecture_id": lid, "seconds": 10}).status_code == 204
+    assert client.post("/me/events", headers=auth(_outsider(client)), json={"lecture_id": lid, "seconds": 10}).status_code == 403
 
 
 def test_record_lecture_requires_own_course(client, ids, student_token, tmp_path, monkeypatch):

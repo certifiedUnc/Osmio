@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..deps import get_current_user
+from ..deps import course_access_or_403, get_current_user
 from ..models import (
     Announcement,
     Assignment,
@@ -128,6 +128,8 @@ def record_event(
     lecture = db.get(Lecture, payload.lecture_id)
     if lecture is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "lecture not found")
+    # Only count watch time for a course the user is actually in, so the meter can't be spoofed.
+    course_access_or_403(db, user, lecture.course_id)
     seconds = max(0, min(payload.seconds, 120))
     if seconds == 0:
         return
@@ -148,6 +150,7 @@ def course_announcements(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    course_access_or_403(db, user, course_id)
     return db.scalars(
         select(Announcement)
         .where(Announcement.course_id == course_id)
@@ -161,6 +164,7 @@ def course_assignments(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    course_access_or_403(db, user, course_id)
     return db.scalars(
         select(Assignment).where(Assignment.course_id == course_id).order_by(Assignment.due_at)
     ).all()

@@ -71,9 +71,9 @@ export default function ProcessingPage({ params }: { params: Promise<{ id: strin
 
   const poll = useCallback((tries = 0) => {
     setTimeout(async () => {
-      if (!mounted.current) return;
+      if (!mounted.current || !token) return;
       try {
-        const l = await getLecture(lectureId);
+        const l = await getLecture(lectureId, token);
         if (!mounted.current) return;
         setLecture(l);
         if (ACTIVE.has(l.status) && tries < 20) poll(tries + 1);
@@ -81,11 +81,11 @@ export default function ProcessingPage({ params }: { params: Promise<{ id: strin
         /* stop polling */
       }
     }, 1500);
-  }, [lectureId]);
+  }, [lectureId, token]);
 
   useEffect(() => {
     if (!token || !Number.isInteger(lectureId)) return;
-    getLecture(lectureId)
+    getLecture(lectureId, token)
       .then((l) => {
         setLecture(l);
         if (ACTIVE.has(l.status)) poll();

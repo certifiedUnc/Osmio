@@ -10,6 +10,14 @@ from .routers import admin, auth, discussions, instructor, lectures, me, partner
 from .seed import seed
 
 
+def _check_config() -> None:
+    # Never let a real deployment run on the built-in development secret.
+    if settings.environment != "development" and settings.jwt_secret == "dev-secret-change-me":
+        raise RuntimeError(
+            "JWT_SECRET must be set to a strong value when ENVIRONMENT is not 'development'"
+        )
+
+
 def _run_migrations() -> None:
     # Bring the schema up to date via Alembic, then seed a demo course on a fresh database.
     command.upgrade(AlembicConfig("alembic.ini"), "head")
@@ -17,6 +25,7 @@ def _run_migrations() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _check_config()
     _run_migrations()
     seed()
     yield

@@ -8,7 +8,16 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import get_db
-from .models import Partner, PartnerApiKey, PartnerRequest, PartnerStatus, Role, User
+from .models import (
+    Course,
+    Enrollment,
+    Partner,
+    PartnerApiKey,
+    PartnerRequest,
+    PartnerStatus,
+    Role,
+    User,
+)
 from .security import decode_access_token, verify_api_key
 
 bearer = HTTPBearer(auto_error=False)
@@ -38,6 +47,31 @@ def require_role(*roles: Role):
         return user
 
     return dep
+
+
+def course_is_staff(user: User, course: Course) -> bool:
+    """Admins and the course's own instructor are staff for that course."""
+    return user.role == Role.admin or (
+        user.role == Role.instructor and course.instructor_id == user.id
+    )
+
+
+def course_access_or_403(db: Session, user: User, course_id: int) -> Course:
+    """Admin, the owning instructor, or an enrolled student may read a course's content."""
+    course = db.get(Course, course_id)
+    if course is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "course not found")
+    if course_is_staff(user, course):
+        return course
+    if user.role == Role.student:
+        enrolled = db.scalar(
+            select(Enrollment).where(
+                Enrollment.course_id == course_id, Enrollment.student_id == user.id
+            )
+        )
+        if enrolled:
+            return course
+    raise HTTPException(status.HTTP_403_FORBIDDEN, "you do not have access to this course")
 
 
 def get_partner_key(
